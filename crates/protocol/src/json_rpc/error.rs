@@ -1,18 +1,13 @@
-//! Error types defined by the JSON-RPC specification.
-
 use std::borrow::Cow;
 use std::fmt::{self, Display, Formatter};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// A specialized [`Result`] error type for JSON-RPC handlers.
-///
-/// [`Result`]: enum@std::result::Result
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// A list of numeric error codes used in JSON-RPC responses.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize, Clone)]
 #[serde(into = "i64", from = "i64")]
 pub enum ErrorCode {
     /// Invalid JSON was received by the server.
@@ -116,8 +111,8 @@ impl Error {
     /// Creates a new error from the given `ErrorCode`.
     pub const fn new(code: ErrorCode) -> Self {
         Error {
-            code,
             message: Cow::Borrowed(code.description()),
+            code,
             data: None,
         }
     }

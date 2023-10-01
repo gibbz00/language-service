@@ -1,7 +1,7 @@
 use lsp_types::request::Request;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 
-use crate::{version::Version, Error, Result};
+use super::{version::Version, Error, Message, Result};
 
 #[derive(Debug, Eq, Hash, PartialEq, Deserialize, Serialize)]
 #[serde(untagged)]
@@ -19,23 +19,7 @@ pub struct ResponseMessage<R: Request> {
     kind: Result<R::Result>,
 }
 
-impl<R: Request> ResponseMessage<R> {
-    pub fn new(id: ResponseId, kind: Result<R::Result>) -> Self {
-        ResponseMessage { id, kind }
-    }
-
-    pub fn into_parts(self) -> (ResponseId, Result<R::Result>) {
-        (self.id, self.kind)
-    }
-
-    pub fn id(&self) -> &ResponseId {
-        &self.id
-    }
-
-    pub fn kind(&self) -> std::result::Result<&R::Result, &Error> {
-        self.kind.as_ref()
-    }
-}
+impl<R: Request> Message for ResponseMessage<R> {}
 
 impl<R: Request> Serialize for ResponseMessage<R> {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -88,7 +72,7 @@ impl<'de, R: Request> Deserialize<'de> for ResponseMessage<R> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use lsp_types::request::Shutdown;
     use once_cell::sync::Lazy;
     use serde_json::json;
@@ -119,7 +103,7 @@ mod tests {
         }
     }
 
-    const SHUTDOWN_RESPONSE_MOCK: ResponseMessage<Shutdown> = ResponseMessage {
+    pub const SHUTDOWN_RESPONSE_MOCK: ResponseMessage<Shutdown> = ResponseMessage {
         id: ResponseId::Number(0),
         kind: Ok(()),
     };
