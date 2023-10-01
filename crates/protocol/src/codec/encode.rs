@@ -55,7 +55,7 @@ mod tests {
     }
 }
 
-mod protocol_message {
+pub(crate) mod protocol_message {
     use std::fmt::Display;
 
     use crate::{codec::headers::JsonRpcHeaders, messages::Message};

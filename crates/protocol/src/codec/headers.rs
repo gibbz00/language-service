@@ -2,12 +2,12 @@ use std::fmt::Display;
 
 // Not an official IANA Media Type:
 // https://www.iana.org/assignments/media-types/media-types.xhtml
-const JSON_RPC_CONTENT_TYPE: &str = "application/vscode-jsonrpc; charset=utf-8";
+pub(crate) const JSON_RPC_CONTENT_TYPE: &str = "application/vscode-jsonrpc; charset=utf-8";
 // https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#contentPart
 const DEPRECATED_CONTENT_TYPE: &str = "application/vscode-jsonrpc; charset=utf8";
 
-const CONTENT_TYPE_HEADER_NAME: &str = "Content-Length";
-const CONTENT_LENGTH_HEADER_NAME: &str = "Content-Type";
+const CONTENT_LENGTH_HEADER_NAME: &str = "Content-Length";
+pub(crate) const CONTENT_TYPE_HEADER_NAME: &str = "Content-Type";
 
 pub struct JsonRpcHeaders {
     pub content_length: usize,
@@ -18,12 +18,12 @@ impl Display for JsonRpcHeaders {
         write!(
             f,
             "{}: {}\r\n",
-            CONTENT_LENGTH_HEADER_NAME, JSON_RPC_CONTENT_TYPE
+            CONTENT_LENGTH_HEADER_NAME, self.content_length
         )?;
         write!(
             f,
             "{}: {}\r\n",
-            CONTENT_TYPE_HEADER_NAME, self.content_length
+            CONTENT_TYPE_HEADER_NAME, JSON_RPC_CONTENT_TYPE
         )
     }
 }
@@ -111,8 +111,8 @@ mod tests {
     fn displays_header() {
         let header = JsonRpcHeaders { content_length: 10 };
         let expected_string = replace_with_crlf(indoc::indoc! {"
-                    Content-Type: application/vscode-jsonrpc; charset=utf-8
                     Content-Length: 10
+                    Content-Type: application/vscode-jsonrpc; charset=utf-8
                 "});
         assert_eq!(expected_string, header.to_string());
     }

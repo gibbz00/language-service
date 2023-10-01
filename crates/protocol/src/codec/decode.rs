@@ -6,7 +6,7 @@ use crate::{codec::headers::JsonRpcHeaders, messages::Message};
 
 use super::{headers::HeadersParseError, LanguageServerCodec};
 
-#[derive(From)]
+#[derive(Debug, From)]
 pub enum DecodeError {
     Io(std::io::Error),
     Httparse(httparse::Error),
@@ -36,7 +36,7 @@ impl<M: Message> Decoder for LanguageServerCodec<M> {
                                     src.reserve(missing_capacity)
                                 }
 
-                                Ok(None)
+                                self.decode(src)
                             }
                             Err(err) => match err {
                                 HeadersParseError::MissingContentLength => Ok(None),
@@ -62,5 +62,81 @@ impl<M: Message> Decoder for LanguageServerCodec<M> {
                 Ok(Some(message))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use lsp_types::request::Shutdown;
+    use once_cell::sync::Lazy;
+
+    use crate::{
+        codec::{
+            encode::protocol_message::ProtocolMessage,
+            headers::{CONTENT_TYPE_HEADER_NAME, JSON_RPC_CONTENT_TYPE},
+        },
+        messages::response::{tests::SHUTDOWN_RESPONSE_MOCK, ResponseMessage},
+    };
+
+    use super::*;
+
+    static PROTOCOL_MESSAGE: Lazy<String> = Lazy::new(|| {
+        ProtocolMessage::try_new(SHUTDOWN_RESPONSE_MOCK)
+            .unwrap()
+            .to_string()
+    });
+
+    #[test]
+    fn decodes_message() {
+        let mut message_bytes = BytesMut::from(PROTOCOL_MESSAGE.as_str());
+
+        let mut codec = LanguageServerCodec::<ResponseMessage<Shutdown>>::default();
+        assert_eq!(
+            SHUTDOWN_RESPONSE_MOCK,
+            codec.decode(&mut message_bytes).unwrap().unwrap()
+        )
+    }
+
+    #[test]
+    fn ok_on_missing_content_length_header() {
+        let mut message_bytes = BytesMut::from(
+            format!("{}: {}", CONTENT_TYPE_HEADER_NAME, JSON_RPC_CONTENT_TYPE).as_str(),
+        );
+
+        let mut codec = LanguageServerCodec::<ResponseMessage<Shutdown>>::default();
+        assert!(codec.decode(&mut message_bytes).unwrap().is_none())
+    }
+
+    #[test]
+    fn ok_on_partial_headers() {
+        let mut message_bytes = BytesMut::from("cont");
+
+        let mut codec = LanguageServerCodec::<ResponseMessage<Shutdown>>::default();
+        assert!(codec.decode(&mut message_bytes).unwrap().is_none())
+    }
+
+    #[test]
+    fn ok_on_partial_content() {
+        let mut message_bytes = BytesMut::from(
+            JsonRpcHeaders {
+                content_length: 100,
+            }
+            .to_string()
+            .as_str(),
+        );
+
+        let mut codec = LanguageServerCodec::<ResponseMessage<Shutdown>>::default();
+        assert!(codec.decode(&mut message_bytes).unwrap().is_none())
+    }
+
+    #[test]
+    #[should_panic]
+    fn to_many_bytes_are_unimplemented() {
+        let mut message_bytes = BytesMut::from(
+            format!("{}\r\nsomething", JsonRpcHeaders { content_length: 1 }).as_str(),
+        );
+
+        let mut codec = LanguageServerCodec::<ResponseMessage<Shutdown>>::default();
+        let _ = codec.decode(&mut message_bytes);
     }
 }
