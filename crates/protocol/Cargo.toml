@@ -7,8 +7,12 @@ edition = "2021"
 tokio-util = { version = "0.7", features = ["codec"] }
 bytes = "1"
 serde = { version = "1", features = ["derive"] }
+serde_repr = "0.1"
+strum = { version = "0.25", features = ["derive"] }
 serde_json = "1"
-lsp-types = "0.94"
+# TEMP: https://github.com/gluon-lang/lsp-types/pull/265
+lsp-types = { git = "https://github.com/gibbz00/lsp-types", branch = "error_codes" }
+
 derive_more = "0.99"
 httparse = "1"
 

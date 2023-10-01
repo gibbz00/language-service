@@ -1,11 +1,9 @@
 use lsp_types::request::Request;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 
-use super::{
-    error::{Error, Result},
-    version::Version,
-    Message,
-};
+use self::response_error::ResponseError;
+
+use super::{version::Version, Message};
 
 #[derive(Debug, Eq, Hash, PartialEq, Deserialize, Serialize)]
 #[serde(untagged)]
@@ -20,7 +18,7 @@ pub enum ResponseId {
 
 pub struct ResponseMessage<R: Request> {
     id: ResponseId,
-    kind: Result<R::Result>,
+    kind: Result<R::Result, ResponseError>,
 }
 
 impl<R: Request> Message for ResponseMessage<R> {}
@@ -60,7 +58,7 @@ impl<'de, R: Request> Deserialize<'de> for ResponseMessage<R> {
             #[serde(rename = "result")]
             Ok(R::Result),
             #[serde(rename = "error")]
-            Error(Error),
+            Error(ResponseError),
         }
 
         let response_messarge_dom = ResponseMessageDom::<R>::deserialize(deserializer)?;
@@ -135,5 +133,115 @@ pub mod tests {
             serde_json::from_value::<ResponseMessage<Shutdown>>(SHUTDOWN_RESPONSE_JSON.clone(),)
                 .unwrap()
         )
+    }
+}
+
+mod response_error {
+    use serde::{Deserialize, Serialize};
+    use serde_json::Value;
+    use serde_repr::{Deserialize_repr, Serialize_repr};
+    use strum::FromRepr;
+
+    #[derive(Debug, Serialize, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    pub struct ResponseError {
+        pub code: ResponseErrorCode,
+        pub message: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub data: Option<Value>,
+    }
+
+    #[derive(Debug, PartialEq)]
+    pub enum ResponseErrorCode {
+        Reserved(ReservedResponseErrorCodes),
+        Other(i64),
+    }
+
+    impl Serialize for ResponseErrorCode {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            match self {
+                ResponseErrorCode::Reserved(reserved_code) => reserved_code.serialize(serializer),
+                ResponseErrorCode::Other(other) => serializer.serialize_i64(*other),
+            }
+        }
+    }
+
+    impl<'de> Deserialize<'de> for ResponseErrorCode {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            i64::deserialize(deserializer).map(|code| {
+                ReservedResponseErrorCodes::from_repr(code)
+                    .map(Self::Reserved)
+                    .unwrap_or(Self::Other(code))
+            })
+        }
+    }
+
+    #[derive(Debug, PartialEq, Serialize_repr, Deserialize_repr, FromRepr)]
+    #[repr(i64)]
+    pub enum ReservedResponseErrorCodes {
+        ParseError = json_rpc_error_codes::PARSE_ERROR,
+        InvalidRequest = json_rpc_error_codes::INVALID_REQUEST,
+        MethodNotFound = json_rpc_error_codes::METHOD_NOT_FOUND,
+        InvalidParams = json_rpc_error_codes::INVALID_PARAMS,
+        InternalError = json_rpc_error_codes::INTERNAL_ERROR,
+        RequestFailed = lsp_types::error_codes::REQUEST_FAILED,
+        RequestCancelled = lsp_types::error_codes::REQUEST_CANCELLED,
+        ContentModified = lsp_types::error_codes::SERVER_CANCELLED,
+    }
+
+    mod json_rpc_error_codes {
+        pub const PARSE_ERROR: i64 = -32700;
+        pub const INVALID_REQUEST: i64 = -32600;
+        pub const METHOD_NOT_FOUND: i64 = -32601;
+        pub const INVALID_PARAMS: i64 = -32602;
+        pub const INTERNAL_ERROR: i64 = -32603;
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn serializes_reserved_response_error_code_as_i64() {
+            assert_eq!(
+                json_rpc_error_codes::PARSE_ERROR.to_string(),
+                serde_json::to_string(&ResponseErrorCode::Reserved(
+                    ReservedResponseErrorCodes::ParseError
+                ))
+                .unwrap()
+            )
+        }
+
+        #[test]
+        fn serializes_other_response_error_code_as_i64() {
+            const OTHER_CODE: i64 = -123;
+            assert_eq!(
+                OTHER_CODE.to_string(),
+                serde_json::to_string(&ResponseErrorCode::Other(OTHER_CODE)).unwrap()
+            )
+        }
+
+        #[test]
+        fn deserializes_reserved_response_error_code_from_i64() {
+            assert_eq!(
+                ResponseErrorCode::Reserved(ReservedResponseErrorCodes::ParseError),
+                serde_json::from_str(&json_rpc_error_codes::PARSE_ERROR.to_string()).unwrap()
+            )
+        }
+
+        #[test]
+        fn deserializes_other_response_error_code_from_i64() {
+            const OTHER_CODE: i64 = -123;
+            assert_eq!(
+                ResponseErrorCode::Other(OTHER_CODE),
+                serde_json::from_str(&OTHER_CODE.to_string()).unwrap()
+            )
+        }
     }
 }
