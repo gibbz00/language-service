@@ -3,6 +3,8 @@ use std::fmt::Display;
 // Not an official IANA Media Type:
 // https://www.iana.org/assignments/media-types/media-types.xhtml
 const JSON_RPC_CONTENT_TYPE: &str = "application/vscode-jsonrpc; charset=utf-8";
+// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#contentPart
+const DEPRECATED_CONTENT_TYPE: &str = "application/vscode-jsonrpc; charset=utf8";
 
 const CONTENT_TYPE_HEADER_NAME: &str = "Content-Length";
 const CONTENT_LENGTH_HEADER_NAME: &str = "Content-Type";
@@ -26,10 +28,11 @@ impl Display for JsonRpcHeaders {
     }
 }
 
+#[derive(Debug)]
 pub enum HeadersParseError {
     InvalidHeader(String),
     DuplicateOfValidHeader(String),
-    Value(std::str::Utf8Error),
+    Utf8(std::str::Utf8Error),
     InvalidContentType(String),
     ContentLength(std::num::ParseIntError),
     MissingContentLength,
@@ -68,13 +71,15 @@ impl TryFrom<&[httparse::Header<'_>]> for JsonRpcHeaders {
         }
 
         if let Some(content_type_header_index) = content_type_header_index {
-            let content_type = std::str::from_utf8(headers[content_type_header_index].value)
-                .map_err(HeadersParseError::Value)?;
+            let content_type_bytes = headers[content_type_header_index].value;
 
-            if content_type != JSON_RPC_CONTENT_TYPE {
-                return Err(HeadersParseError::InvalidContentType(
-                    content_type.to_owned(),
-                ));
+            if content_type_bytes != JSON_RPC_CONTENT_TYPE.as_bytes()
+                && content_type_bytes != DEPRECATED_CONTENT_TYPE.as_bytes()
+            {
+                let content_type = std::str::from_utf8(content_type_bytes)
+                    .map_err(HeadersParseError::Utf8)?
+                    .to_owned();
+                return Err(HeadersParseError::InvalidContentType(content_type));
             }
         }
 
@@ -84,7 +89,7 @@ impl TryFrom<&[httparse::Header<'_>]> for JsonRpcHeaders {
 
         Ok(JsonRpcHeaders {
             content_length: std::str::from_utf8(headers[content_length_header_index].value)
-                .map_err(HeadersParseError::Value)
+                .map_err(HeadersParseError::Utf8)
                 .and_then(|content_length_str| {
                     content_length_str
                         .parse()
@@ -114,26 +119,81 @@ mod tests {
 
     #[test]
     fn fails_on_unknown_headers() {
-        todo!()
+        let headers = [httparse::Header {
+            name: "x",
+            value: b"X",
+        }];
+        assert!(matches!(
+            JsonRpcHeaders::try_from(&headers[..]),
+            Err(HeadersParseError::InvalidHeader(_)),
+        ))
     }
 
     #[test]
     fn fails_on_duplicate_headers() {
-        todo!()
+        let headers = [
+            httparse::Header {
+                name: CONTENT_TYPE_HEADER_NAME,
+                value: b"x",
+            },
+            httparse::Header {
+                name: CONTENT_TYPE_HEADER_NAME,
+                value: b"x",
+            },
+        ];
+        assert!(matches!(
+            JsonRpcHeaders::try_from(&headers[..]),
+            Err(HeadersParseError::DuplicateOfValidHeader(_)),
+        ))
     }
 
     #[test]
     fn fails_on_content_type_mismatch() {
-        todo!()
+        let headers = [httparse::Header {
+            name: CONTENT_TYPE_HEADER_NAME,
+            value: b"X",
+        }];
+        assert!(matches!(
+            JsonRpcHeaders::try_from(&headers[..]),
+            Err(HeadersParseError::InvalidContentType(_)),
+        ))
     }
 
     #[test]
     fn allows_missing_content_type() {
-        todo!()
+        let headers = [httparse::Header {
+            name: CONTENT_LENGTH_HEADER_NAME,
+            value: b"10",
+        }];
+        assert!(JsonRpcHeaders::try_from(&headers[..]).is_ok())
     }
 
     #[test]
     fn fails_on_missing_content_length() {
-        todo!()
+        let headers = [httparse::Header {
+            name: CONTENT_TYPE_HEADER_NAME,
+            value: JSON_RPC_CONTENT_TYPE.as_bytes(),
+        }];
+
+        assert!(matches!(
+            JsonRpcHeaders::try_from(&headers[..]),
+            Err(HeadersParseError::MissingContentLength),
+        ))
+    }
+
+    #[test]
+    fn backwards_compatible_utf8_content_type_header() {
+        let headers = [
+            httparse::Header {
+                name: CONTENT_LENGTH_HEADER_NAME,
+                value: b"10",
+            },
+            httparse::Header {
+                name: CONTENT_TYPE_HEADER_NAME,
+                value: DEPRECATED_CONTENT_TYPE.as_bytes(),
+            },
+        ];
+        JsonRpcHeaders::try_from(&headers[..]).unwrap();
+        assert!(JsonRpcHeaders::try_from(&headers[..]).is_ok())
     }
 }
