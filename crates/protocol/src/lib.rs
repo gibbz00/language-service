@@ -1,2 +1,2 @@
 mod codec;
-mod json_rpc;
+mod messages;

@@ -1,7 +1,11 @@
 use lsp_types::request::Request;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 
-use super::{version::Version, Error, Message, Result};
+use super::{
+    error::{Error, Result},
+    version::Version,
+    Message,
+};
 
 #[derive(Debug, Eq, Hash, PartialEq, Deserialize, Serialize)]
 #[serde(untagged)]
