@@ -10,7 +10,7 @@ use self::protocol_message::ProtocolMessage;
 
 use super::LanguageServerCodec;
 
-#[derive(From)]
+#[derive(Debug, From)]
 pub enum EncodeError {
     Serialize(serde_json::Error),
     Io(std::io::Error),
@@ -27,6 +27,31 @@ impl<M: Message> Encoder<M> for LanguageServerCodec<M> {
         writer.flush()?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use lsp_types::request::Shutdown;
+
+    use crate::messages::response::{tests::SHUTDOWN_RESPONSE_MOCK, ResponseMessage};
+
+    use super::*;
+
+    #[test]
+    fn encodes_message() {
+        let mut language_server_codec = LanguageServerCodec::<ResponseMessage<Shutdown>>::default();
+        let mut message_buffer = BytesMut::new();
+        language_server_codec
+            .encode(SHUTDOWN_RESPONSE_MOCK, &mut message_buffer)
+            .unwrap();
+
+        assert_eq!(
+            &ProtocolMessage::try_new(SHUTDOWN_RESPONSE_MOCK)
+                .unwrap()
+                .to_string(),
+            std::str::from_utf8(&message_buffer).unwrap()
+        )
     }
 }
 
