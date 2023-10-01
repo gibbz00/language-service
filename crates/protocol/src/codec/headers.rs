@@ -8,17 +8,7 @@ const CONTENT_TYPE_HEADER_NAME: &str = "Content-Length";
 const CONTENT_LENGTH_HEADER_NAME: &str = "Content-Type";
 
 pub struct JsonRpcHeaders {
-    content_length: usize,
-}
-
-impl JsonRpcHeaders {
-    pub fn new(content_length: usize) -> Self {
-        Self { content_length }
-    }
-
-    pub fn content_length(&self) -> usize {
-        self.content_length
-    }
+    pub content_length: usize,
 }
 
 impl Display for JsonRpcHeaders {
@@ -114,7 +104,7 @@ mod tests {
 
     #[test]
     fn displays_header() {
-        let header = JsonRpcHeaders::new(10);
+        let header = JsonRpcHeaders { content_length: 10 };
         let expected_string = replace_with_crlf(indoc::indoc! {"
                     Content-Type: application/vscode-jsonrpc; charset=utf-8
                     Content-Length: 10

@@ -27,7 +27,7 @@ impl<M: Message> Decoder for LanguageServerCodec<M> {
                     httparse::Status::Complete((parsed_src_index, headers)) => {
                         match JsonRpcHeaders::try_from(headers) {
                             Ok(json_rpc_headers) => {
-                                let content_length = json_rpc_headers.content_length();
+                                let content_length = json_rpc_headers.content_length;
                                 self.known_content_length = Some(content_length);
                                 src.advance(parsed_src_index);
 

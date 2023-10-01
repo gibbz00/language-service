@@ -44,7 +44,9 @@ mod protocol_message {
         pub fn try_new(message: impl Message) -> Result<Self, serde_json::Error> {
             let body = serde_json::to_string(&message)?;
             Ok(Self {
-                header: JsonRpcHeaders::new(body.len()),
+                header: JsonRpcHeaders {
+                    content_length: body.len(),
+                },
                 body,
             })
         }
@@ -67,7 +69,9 @@ mod protocol_message {
             let body_string = serde_json::to_string(&SHUTDOWN_RESPONSE_MOCK).unwrap();
             let expected_string = format!(
                 "{}\r\n{}",
-                JsonRpcHeaders::new(body_string.len()),
+                JsonRpcHeaders {
+                    content_length: body_string.len()
+                },
                 body_string
             );
 
