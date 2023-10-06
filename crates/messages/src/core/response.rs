@@ -190,6 +190,8 @@ mod response_error {
         MethodNotFound = json_rpc_error_codes::METHOD_NOT_FOUND,
         InvalidParams = json_rpc_error_codes::INVALID_PARAMS,
         InternalError = json_rpc_error_codes::INTERNAL_ERROR,
+        ServerNotInitialized = lsp_types::error_codes::SERVER_NOT_INITIALIZED,
+        UnknownErrorCode = lsp_types::error_codes::UNKNOWN_ERROR_CODE,
         RequestFailed = lsp_types::error_codes::REQUEST_FAILED,
         RequestCancelled = lsp_types::error_codes::REQUEST_CANCELLED,
         ContentModified = lsp_types::error_codes::SERVER_CANCELLED,
