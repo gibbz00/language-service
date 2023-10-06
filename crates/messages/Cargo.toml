@@ -1,6 +1,6 @@
 [package]
-name = "language-service-protocol"
-version = "0.1.0"
+name = "language-service-messages"
+version = "0.0.1"
 edition = "2021"
 
 [dependencies]
@@ -10,8 +10,7 @@ serde = { version = "1", features = ["derive"] }
 serde_repr = "0.1"
 strum = { version = "0.25", features = ["derive"] }
 serde_json = "1"
-# TEMP: https://github.com/gluon-lang/lsp-types/pull/265
-lsp-types = { git = "https://github.com/gibbz00/lsp-types", branch = "error_codes" }
+lsp-types.workspace = true
 
 derive_more = "0.99"
 httparse = "1"

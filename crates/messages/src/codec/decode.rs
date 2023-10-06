@@ -2,7 +2,7 @@ use bytes::{Buf, BytesMut};
 use derive_more::From;
 use tokio_util::codec::Decoder;
 
-use crate::{codec::headers::JsonRpcHeaders, messages::Message};
+use crate::{codec::headers::JsonRpcHeaders, core::Message};
 
 use super::{headers::HeadersParseError, LanguageServerCodec};
 
@@ -76,7 +76,7 @@ mod tests {
             encode::protocol_message::ProtocolMessage,
             headers::{CONTENT_TYPE_HEADER_NAME, JSON_RPC_CONTENT_TYPE},
         },
-        messages::response::{tests::SHUTDOWN_RESPONSE_MOCK, ResponseMessage},
+        core::response::{tests::SHUTDOWN_RESPONSE_MOCK, ResponseMessage},
     };
 
     use super::*;

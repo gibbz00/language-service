@@ -4,7 +4,7 @@ use bytes::{BufMut, BytesMut};
 use derive_more::From;
 use tokio_util::codec::Encoder;
 
-use crate::messages::Message;
+use crate::core::Message;
 
 use self::protocol_message::ProtocolMessage;
 
@@ -34,7 +34,7 @@ impl<M: Message> Encoder<M> for LanguageServerCodec<M> {
 mod tests {
     use lsp_types::request::Shutdown;
 
-    use crate::messages::response::{tests::SHUTDOWN_RESPONSE_MOCK, ResponseMessage};
+    use crate::core::response::{tests::SHUTDOWN_RESPONSE_MOCK, ResponseMessage};
 
     use super::*;
 
@@ -58,7 +58,7 @@ mod tests {
 pub(crate) mod protocol_message {
     use std::fmt::Display;
 
-    use crate::{codec::headers::JsonRpcHeaders, messages::Message};
+    use crate::{codec::headers::JsonRpcHeaders, core::Message};
 
     pub struct ProtocolMessage {
         pub header: JsonRpcHeaders,
@@ -85,7 +85,7 @@ pub(crate) mod protocol_message {
 
     #[cfg(test)]
     mod tests {
-        use crate::messages::response::tests::SHUTDOWN_RESPONSE_MOCK;
+        use crate::core::response::tests::SHUTDOWN_RESPONSE_MOCK;
 
         use super::*;
 

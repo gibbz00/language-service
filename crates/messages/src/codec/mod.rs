@@ -4,7 +4,7 @@ mod headers;
 
 use std::marker::PhantomData;
 
-use crate::messages::Message;
+use crate::core::Message;
 
 pub struct LanguageServerCodec<M: Message> {
     known_content_length: Option<usize>,

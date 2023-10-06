@@ -4,3 +4,10 @@ resolver = "2"
 members = [ 
   "crates/*"
 ]
+
+[workspace.dependencies]
+# TEMP:
+# https://github.com/gluon-lang/lsp-types/pull/265
+# https://github.com/gluon-lang/lsp-types/pull/266
+# https://github.com/gluon-lang/lsp-types/pull/267
+lsp-types = { git = "https://github.com/gibbz00/lsp-types", branch = "mixed_features" }
