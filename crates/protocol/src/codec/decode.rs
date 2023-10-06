@@ -67,6 +67,7 @@ impl<M: Message> Decoder for LanguageServerCodec<M> {
 
 #[cfg(test)]
 mod tests {
+    use bytes::BufMut;
     use lsp_types::request::Shutdown;
     use once_cell::sync::Lazy;
 
@@ -87,14 +88,22 @@ mod tests {
     });
 
     #[test]
-    fn decodes_message() {
-        let mut message_bytes = BytesMut::from(PROTOCOL_MESSAGE.as_str());
-
+    fn decodes_messages() {
+        let mut message_bytes = BytesMut::new();
         let mut codec = LanguageServerCodec::<ResponseMessage<Shutdown>>::default();
-        assert_eq!(
-            SHUTDOWN_RESPONSE_MOCK,
-            codec.decode(&mut message_bytes).unwrap().unwrap()
-        )
+        decode_message(&mut message_bytes, &mut codec);
+        decode_message(&mut message_bytes, &mut codec);
+
+        fn decode_message(
+            message_bytes: &mut BytesMut,
+            codec: &mut LanguageServerCodec<ResponseMessage<Shutdown>>,
+        ) {
+            message_bytes.put(PROTOCOL_MESSAGE.as_bytes());
+            assert_eq!(
+                SHUTDOWN_RESPONSE_MOCK,
+                codec.decode(message_bytes).unwrap().unwrap()
+            )
+        }
     }
 
     #[test]
