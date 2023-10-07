@@ -4,7 +4,7 @@ use bytes::{BufMut, BytesMut};
 use derive_more::From;
 use tokio_util::codec::Encoder;
 
-use crate::groups::Message;
+use crate::groups::MessageGroup;
 
 use self::protocol_message::ProtocolMessage;
 
@@ -16,7 +16,7 @@ pub enum EncodeError {
     Io(std::io::Error),
 }
 
-impl<M: Message> Encoder<M> for LanguageServerCodec<M> {
+impl<M: MessageGroup> Encoder<M> for LanguageServerCodec<M> {
     type Error = EncodeError;
 
     fn encode(&mut self, item: M, dst: &mut BytesMut) -> Result<(), Self::Error> {
@@ -56,7 +56,7 @@ mod tests {
 pub(crate) mod protocol_message {
     use std::fmt::Display;
 
-    use crate::{codec::headers::JsonRpcHeaders, groups::Message};
+    use crate::{codec::headers::JsonRpcHeaders, groups::MessageGroup};
 
     pub struct ProtocolMessage {
         pub header: JsonRpcHeaders,
@@ -64,7 +64,7 @@ pub(crate) mod protocol_message {
     }
 
     impl ProtocolMessage {
-        pub fn try_new(message: impl Message) -> Result<Self, serde_json::Error> {
+        pub fn try_new(message: impl MessageGroup) -> Result<Self, serde_json::Error> {
             let body = serde_json::to_string(&message)?;
             Ok(Self {
                 header: JsonRpcHeaders {

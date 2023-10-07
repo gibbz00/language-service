@@ -1,0 +1,12 @@
+[package]
+name = "language-service-agents"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+language-service-messages = { path = "../messages" }
+
+futures.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+lsp-types.workspace = true

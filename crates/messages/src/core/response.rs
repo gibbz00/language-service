@@ -1,9 +1,9 @@
-use lsp_types::request::Request;
+use lsp_types::{request::Request, NumberOrString};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 
 use self::response_error::ResponseError;
 
-use super::version::Version;
+use super::{request::RequestId, version::Version};
 
 #[derive(Debug, Eq, Hash, PartialEq, Deserialize, Serialize)]
 #[serde(untagged)]
@@ -16,9 +16,18 @@ pub enum ResponseId {
     Null,
 }
 
+impl From<RequestId> for ResponseId {
+    fn from(request_id: RequestId) -> Self {
+        match request_id.into() {
+            NumberOrString::Number(number) => ResponseId::Number(number),
+            NumberOrString::String(string) => ResponseId::String(string),
+        }
+    }
+}
+
 pub struct ResponseMessage<R: Request> {
-    id: ResponseId,
-    kind: Result<R::Result, ResponseError>,
+    pub id: ResponseId,
+    pub kind: Result<R::Result, ResponseError>,
 }
 
 impl<R: Request> Serialize for ResponseMessage<R> {
@@ -134,7 +143,7 @@ pub mod tests {
     }
 }
 
-mod response_error {
+pub mod response_error {
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
     use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -147,6 +156,21 @@ mod response_error {
         pub message: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         pub data: Option<Value>,
+    }
+
+    #[derive(Debug, PartialEq, Serialize_repr, Deserialize_repr, FromRepr)]
+    #[repr(i64)]
+    pub enum ReservedResponseErrorCodes {
+        ParseError = json_rpc_error_codes::PARSE_ERROR,
+        InvalidRequest = json_rpc_error_codes::INVALID_REQUEST,
+        MethodNotFound = json_rpc_error_codes::METHOD_NOT_FOUND,
+        InvalidParams = json_rpc_error_codes::INVALID_PARAMS,
+        InternalError = json_rpc_error_codes::INTERNAL_ERROR,
+        ServerNotInitialized = lsp_types::error_codes::SERVER_NOT_INITIALIZED,
+        UnknownErrorCode = lsp_types::error_codes::UNKNOWN_ERROR_CODE,
+        RequestFailed = lsp_types::error_codes::REQUEST_FAILED,
+        RequestCancelled = lsp_types::error_codes::REQUEST_CANCELLED,
+        ContentModified = lsp_types::error_codes::SERVER_CANCELLED,
     }
 
     #[derive(Debug, PartialEq)]
@@ -178,21 +202,6 @@ mod response_error {
                     .unwrap_or(Self::Other(code))
             })
         }
-    }
-
-    #[derive(Debug, PartialEq, Serialize_repr, Deserialize_repr, FromRepr)]
-    #[repr(i64)]
-    pub enum ReservedResponseErrorCodes {
-        ParseError = json_rpc_error_codes::PARSE_ERROR,
-        InvalidRequest = json_rpc_error_codes::INVALID_REQUEST,
-        MethodNotFound = json_rpc_error_codes::METHOD_NOT_FOUND,
-        InvalidParams = json_rpc_error_codes::INVALID_PARAMS,
-        InternalError = json_rpc_error_codes::INTERNAL_ERROR,
-        ServerNotInitialized = lsp_types::error_codes::SERVER_NOT_INITIALIZED,
-        UnknownErrorCode = lsp_types::error_codes::UNKNOWN_ERROR_CODE,
-        RequestFailed = lsp_types::error_codes::REQUEST_FAILED,
-        RequestCancelled = lsp_types::error_codes::REQUEST_CANCELLED,
-        ContentModified = lsp_types::error_codes::SERVER_CANCELLED,
     }
 
     mod json_rpc_error_codes {

@@ -1,3 +1,4 @@
+use derive_more::Display;
 use std::fmt::Display;
 
 // Not an official IANA Media Type:
@@ -28,7 +29,7 @@ impl Display for JsonRpcHeaders {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Display)]
 pub enum HeadersParseError {
     InvalidHeader(String),
     DuplicateOfValidHeader(String),

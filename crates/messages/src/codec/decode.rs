@@ -1,12 +1,12 @@
 use bytes::{Buf, BytesMut};
-use derive_more::From;
+use derive_more::{Display, From};
 use tokio_util::codec::Decoder;
 
-use crate::{codec::headers::JsonRpcHeaders, groups::Message};
+use crate::{codec::headers::JsonRpcHeaders, groups::MessageGroup};
 
 use super::{headers::HeadersParseError, LanguageServerCodec};
 
-#[derive(Debug, From)]
+#[derive(Debug, Display, From)]
 pub enum DecodeError {
     Io(std::io::Error),
     Httparse(httparse::Error),
@@ -14,7 +14,7 @@ pub enum DecodeError {
     Deserialize(serde_json::Error),
 }
 
-impl<M: Message> Decoder for LanguageServerCodec<M> {
+impl<M: MessageGroup> Decoder for LanguageServerCodec<M> {
     type Item = M;
     type Error = DecodeError;
 
