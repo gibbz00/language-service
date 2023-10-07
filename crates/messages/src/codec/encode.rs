@@ -4,7 +4,7 @@ use bytes::{BufMut, BytesMut};
 use derive_more::From;
 use tokio_util::codec::Encoder;
 
-use crate::core::Message;
+use crate::groups::Message;
 
 use self::protocol_message::ProtocolMessage;
 
@@ -32,22 +32,20 @@ impl<M: Message> Encoder<M> for LanguageServerCodec<M> {
 
 #[cfg(test)]
 mod tests {
-    use lsp_types::request::Shutdown;
-
-    use crate::core::response::{tests::SHUTDOWN_RESPONSE_MOCK, ResponseMessage};
+    use crate::groups::tests::{MockAgentMessage, AGENT_MESSAGE_MOCK};
 
     use super::*;
 
     #[test]
     fn encodes_message() {
-        let mut language_server_codec = LanguageServerCodec::<ResponseMessage<Shutdown>>::default();
+        let mut language_server_codec = LanguageServerCodec::<MockAgentMessage>::default();
         let mut message_buffer = BytesMut::new();
         language_server_codec
-            .encode(SHUTDOWN_RESPONSE_MOCK, &mut message_buffer)
+            .encode(AGENT_MESSAGE_MOCK, &mut message_buffer)
             .unwrap();
 
         assert_eq!(
-            &ProtocolMessage::try_new(SHUTDOWN_RESPONSE_MOCK)
+            &ProtocolMessage::try_new(AGENT_MESSAGE_MOCK)
                 .unwrap()
                 .to_string(),
             std::str::from_utf8(&message_buffer).unwrap()
@@ -58,7 +56,7 @@ mod tests {
 pub(crate) mod protocol_message {
     use std::fmt::Display;
 
-    use crate::{codec::headers::JsonRpcHeaders, core::Message};
+    use crate::{codec::headers::JsonRpcHeaders, groups::Message};
 
     pub struct ProtocolMessage {
         pub header: JsonRpcHeaders,
@@ -84,14 +82,22 @@ pub(crate) mod protocol_message {
     }
 
     #[cfg(test)]
-    mod tests {
-        use crate::core::response::tests::SHUTDOWN_RESPONSE_MOCK;
+    pub mod tests {
+        use once_cell::sync::Lazy;
+
+        use crate::groups::tests::AGENT_MESSAGE_MOCK;
 
         use super::*;
 
+        pub static PROTOCOL_MESSAGE: Lazy<String> = Lazy::new(|| {
+            ProtocolMessage::try_new(AGENT_MESSAGE_MOCK)
+                .unwrap()
+                .to_string()
+        });
+
         #[test]
         fn displays_protocol_message() {
-            let body_string = serde_json::to_string(&SHUTDOWN_RESPONSE_MOCK).unwrap();
+            let body_string = serde_json::to_string(&AGENT_MESSAGE_MOCK).unwrap();
             let expected_string = format!(
                 "{}\r\n{}",
                 JsonRpcHeaders {
@@ -100,12 +106,7 @@ pub(crate) mod protocol_message {
                 body_string
             );
 
-            assert_eq!(
-                expected_string,
-                ProtocolMessage::try_new(SHUTDOWN_RESPONSE_MOCK)
-                    .unwrap()
-                    .to_string()
-            );
+            assert_eq!(expected_string, *PROTOCOL_MESSAGE);
         }
     }
 }

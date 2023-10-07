@@ -3,7 +3,7 @@ use serde::{ser::SerializeMap, Deserialize, Serialize};
 
 use self::response_error::ResponseError;
 
-use super::{version::Version, Message};
+use super::version::Version;
 
 #[derive(Debug, Eq, Hash, PartialEq, Deserialize, Serialize)]
 #[serde(untagged)]
@@ -20,8 +20,6 @@ pub struct ResponseMessage<R: Request> {
     id: ResponseId,
     kind: Result<R::Result, ResponseError>,
 }
-
-impl<R: Request> Message for ResponseMessage<R> {}
 
 impl<R: Request> Serialize for ResponseMessage<R> {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -73,6 +71,30 @@ impl<'de, R: Request> Deserialize<'de> for ResponseMessage<R> {
     }
 }
 
+impl<R: Request> std::fmt::Debug for ResponseMessage<R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut debug_struct = f.debug_struct("ResponseMessage");
+        debug_struct
+            .field("jsonrpc", &Version)
+            .field("id", &self.id);
+        match &self.kind {
+            Ok(value) => debug_struct.field("result", &serde_json::to_string(value).unwrap()),
+            Err(err) => debug_struct.field("error", err),
+        };
+
+        debug_struct.finish()
+    }
+}
+
+impl<R: Request> PartialEq for ResponseMessage<R> {
+    fn eq(&self, other: &Self) -> bool {
+        const SERIALIZE_ERROR_MESSAGE: &str = "Kind should be serializable into Value.";
+        serde_json::to_value(&self.kind).expect(SERIALIZE_ERROR_MESSAGE)
+            == serde_json::to_value(&other.kind).expect(SERIALIZE_ERROR_MESSAGE)
+            && self.id == other.id
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use lsp_types::request::Shutdown;
@@ -80,30 +102,6 @@ pub mod tests {
     use serde_json::json;
 
     use super::*;
-
-    impl<R: Request> std::fmt::Debug for ResponseMessage<R> {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            let mut debug_struct = f.debug_struct("ResponseMessage");
-            debug_struct
-                .field("jsonrpc", &Version)
-                .field("id", &self.id);
-            match &self.kind {
-                Ok(value) => debug_struct.field("result", &serde_json::to_string(value).unwrap()),
-                Err(err) => debug_struct.field("error", err),
-            };
-
-            debug_struct.finish()
-        }
-    }
-
-    impl<R: Request> PartialEq for ResponseMessage<R> {
-        fn eq(&self, other: &Self) -> bool {
-            const SERIALIZE_ERROR_MESSAGE: &str = "Kind should be serializable into Value.";
-            serde_json::to_value(&self.kind).expect(SERIALIZE_ERROR_MESSAGE)
-                == serde_json::to_value(&other.kind).expect(SERIALIZE_ERROR_MESSAGE)
-                && self.id == other.id
-        }
-    }
 
     pub const SHUTDOWN_RESPONSE_MOCK: ResponseMessage<Shutdown> = ResponseMessage {
         id: ResponseId::Number(0),
@@ -119,7 +117,7 @@ pub mod tests {
     });
 
     #[test]
-    fn serializes_request_message() {
+    fn serializes_response_message() {
         assert_eq!(
             *SHUTDOWN_RESPONSE_JSON,
             serde_json::to_value(SHUTDOWN_RESPONSE_MOCK).unwrap()
@@ -127,7 +125,7 @@ pub mod tests {
     }
 
     #[test]
-    fn deserializes_request_message() {
+    fn deserializes_response_message() {
         assert_eq!(
             SHUTDOWN_RESPONSE_MOCK,
             serde_json::from_value::<ResponseMessage<Shutdown>>(SHUTDOWN_RESPONSE_JSON.clone(),)

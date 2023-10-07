@@ -21,4 +21,5 @@ tokio-util = "0.7"
 # https://github.com/gluon-lang/lsp-types/pull/265
 # https://github.com/gluon-lang/lsp-types/pull/266
 # https://github.com/gluon-lang/lsp-types/pull/267
+# https://github.com/gluon-lang/lsp-types/pull/268
 lsp-types = { git = "https://github.com/gibbz00/lsp-types", branch = "mixed_features" }

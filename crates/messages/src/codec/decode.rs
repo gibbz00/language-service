@@ -2,7 +2,7 @@ use bytes::{Buf, BytesMut};
 use derive_more::From;
 use tokio_util::codec::Decoder;
 
-use crate::{codec::headers::JsonRpcHeaders, core::Message};
+use crate::{codec::headers::JsonRpcHeaders, groups::Message};
 
 use super::{headers::HeadersParseError, LanguageServerCodec};
 
@@ -68,39 +68,31 @@ impl<M: Message> Decoder for LanguageServerCodec<M> {
 #[cfg(test)]
 mod tests {
     use bytes::BufMut;
-    use lsp_types::request::Shutdown;
-    use once_cell::sync::Lazy;
 
     use crate::{
         codec::{
-            encode::protocol_message::ProtocolMessage,
+            encode::protocol_message::tests::PROTOCOL_MESSAGE,
             headers::{CONTENT_TYPE_HEADER_NAME, JSON_RPC_CONTENT_TYPE},
         },
-        core::response::{tests::SHUTDOWN_RESPONSE_MOCK, ResponseMessage},
+        groups::tests::{MockAgentMessage, AGENT_MESSAGE_MOCK},
     };
 
     use super::*;
 
-    static PROTOCOL_MESSAGE: Lazy<String> = Lazy::new(|| {
-        ProtocolMessage::try_new(SHUTDOWN_RESPONSE_MOCK)
-            .unwrap()
-            .to_string()
-    });
-
     #[test]
     fn decodes_messages() {
         let mut message_bytes = BytesMut::new();
-        let mut codec = LanguageServerCodec::<ResponseMessage<Shutdown>>::default();
+        let mut codec = LanguageServerCodec::<MockAgentMessage>::default();
         decode_message(&mut message_bytes, &mut codec);
         decode_message(&mut message_bytes, &mut codec);
 
         fn decode_message(
             message_bytes: &mut BytesMut,
-            codec: &mut LanguageServerCodec<ResponseMessage<Shutdown>>,
+            codec: &mut LanguageServerCodec<MockAgentMessage>,
         ) {
             message_bytes.put(PROTOCOL_MESSAGE.as_bytes());
             assert_eq!(
-                SHUTDOWN_RESPONSE_MOCK,
+                AGENT_MESSAGE_MOCK,
                 codec.decode(message_bytes).unwrap().unwrap()
             )
         }
@@ -112,7 +104,7 @@ mod tests {
             format!("{}: {}", CONTENT_TYPE_HEADER_NAME, JSON_RPC_CONTENT_TYPE).as_str(),
         );
 
-        let mut codec = LanguageServerCodec::<ResponseMessage<Shutdown>>::default();
+        let mut codec = LanguageServerCodec::<MockAgentMessage>::default();
         assert!(codec.decode(&mut message_bytes).unwrap().is_none())
     }
 
@@ -120,7 +112,7 @@ mod tests {
     fn ok_on_partial_headers() {
         let mut message_bytes = BytesMut::from("cont");
 
-        let mut codec = LanguageServerCodec::<ResponseMessage<Shutdown>>::default();
+        let mut codec = LanguageServerCodec::<MockAgentMessage>::default();
         assert!(codec.decode(&mut message_bytes).unwrap().is_none())
     }
 
@@ -134,7 +126,7 @@ mod tests {
             .as_str(),
         );
 
-        let mut codec = LanguageServerCodec::<ResponseMessage<Shutdown>>::default();
+        let mut codec = LanguageServerCodec::<MockAgentMessage>::default();
         assert!(codec.decode(&mut message_bytes).unwrap().is_none())
     }
 
@@ -145,7 +137,7 @@ mod tests {
             format!("{}\r\nsomething", JsonRpcHeaders { content_length: 1 }).as_str(),
         );
 
-        let mut codec = LanguageServerCodec::<ResponseMessage<Shutdown>>::default();
+        let mut codec = LanguageServerCodec::<MockAgentMessage>::default();
         let _ = codec.decode(&mut message_bytes);
     }
 }

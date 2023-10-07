@@ -2,14 +2,12 @@ use lsp_types::request::Request;
 use lsp_types::NumberOrString;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 
-use super::{version::Version, Message};
+use super::version::Version;
 
 pub struct RequestMessage<R: Request> {
     id: NumberOrString,
     params: Option<R::Params>,
 }
-
-impl<R: Request> Message for RequestMessage<R> {}
 
 impl<R: Request> Serialize for RequestMessage<R> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -56,36 +54,33 @@ impl<'de, R: Request> Deserialize<'de> for RequestMessage<R> {
     }
 }
 
+impl<R: Request> std::fmt::Debug for RequestMessage<R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RequestMessage")
+            .field("jsonrpc", &Version)
+            .field("id", &self.id)
+            .field("method", &R::METHOD)
+            .field("params", &serde_json::to_string(&self.params).unwrap())
+            .finish()
+    }
+}
+
+impl<R: Request> PartialEq for RequestMessage<R> {
+    fn eq(&self, other: &Self) -> bool {
+        const SERIALIZE_ERROR_MESSAGE: &str = "Params should be serializable into Value.";
+        serde_json::to_value(&self.params).expect(SERIALIZE_ERROR_MESSAGE)
+            == serde_json::to_value(&other.params).expect(SERIALIZE_ERROR_MESSAGE)
+            && self.id == other.id
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use lsp_types::{
-        request::{Request, WillRenameFiles},
-        RenameFilesParams,
-    };
+    use lsp_types::{request::WillRenameFiles, RenameFilesParams};
     use once_cell::sync::Lazy;
     use serde_json::json;
 
-    use super::{RequestMessage, Version};
-
-    impl<R: Request> std::fmt::Debug for RequestMessage<R> {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.debug_struct("RequestMessage")
-                .field("jsonrpc", &Version)
-                .field("id", &self.id)
-                .field("method", &R::METHOD)
-                .field("params", &serde_json::to_string(&self.params).unwrap())
-                .finish()
-        }
-    }
-
-    impl<R: Request> PartialEq for RequestMessage<R> {
-        fn eq(&self, other: &Self) -> bool {
-            const SERIALIZE_ERROR_MESSAGE: &str = "Params should be serializable into Value.";
-            serde_json::to_value(&self.params).expect(SERIALIZE_ERROR_MESSAGE)
-                == serde_json::to_value(&other.params).expect(SERIALIZE_ERROR_MESSAGE)
-                && self.id == other.id
-        }
-    }
+    use super::RequestMessage;
 
     const WILL_RENAME_FILES_REQUEST_MOCK: RequestMessage<WillRenameFiles> = RequestMessage {
         id: lsp_types::NumberOrString::Number(0),

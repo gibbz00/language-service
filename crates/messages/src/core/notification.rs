@@ -1,13 +1,11 @@
 use lsp_types::notification::Notification;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 
-use super::{version::Version, Message};
+use super::version::Version;
 
 pub struct NotificationMessage<N: Notification> {
     params: Option<N::Params>,
 }
-
-impl<N: Notification> Message for NotificationMessage<N> {}
 
 impl<R: Notification> Serialize for NotificationMessage<R> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -51,6 +49,24 @@ impl<'de, R: Notification> Deserialize<'de> for NotificationMessage<R> {
     }
 }
 
+impl<R: Notification> std::fmt::Debug for NotificationMessage<R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NotificationMessage")
+            .field("json", &Version)
+            .field("method", &R::METHOD)
+            .field("params", &serde_json::to_string(&self.params).unwrap())
+            .finish()
+    }
+}
+
+impl<R: Notification> PartialEq for NotificationMessage<R> {
+    fn eq(&self, other: &Self) -> bool {
+        const SERIALIZE_ERROR_MESSAGE: &str = "Params should be serializable into Value.";
+        serde_json::to_value(&self.params).expect(SERIALIZE_ERROR_MESSAGE)
+            == serde_json::to_value(&other.params).expect(SERIALIZE_ERROR_MESSAGE)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use lsp_types::{notification::Cancel, CancelParams, NumberOrString};
@@ -58,24 +74,6 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-
-    impl<R: Notification> std::fmt::Debug for NotificationMessage<R> {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.debug_struct("NotificationMessage")
-                .field("json", &Version)
-                .field("method", &R::METHOD)
-                .field("params", &serde_json::to_string(&self.params).unwrap())
-                .finish()
-        }
-    }
-
-    impl<R: Notification> PartialEq for NotificationMessage<R> {
-        fn eq(&self, other: &Self) -> bool {
-            const SERIALIZE_ERROR_MESSAGE: &str = "Params should be serializable into Value.";
-            serde_json::to_value(&self.params).expect(SERIALIZE_ERROR_MESSAGE)
-                == serde_json::to_value(&other.params).expect(SERIALIZE_ERROR_MESSAGE)
-        }
-    }
 
     const CANCEL_NOTIFICATION_MOCK: NotificationMessage<Cancel> = NotificationMessage {
         params: Some(CancelParams {
