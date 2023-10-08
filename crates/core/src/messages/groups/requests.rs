@@ -1,7 +1,7 @@
 use lsp_types::request::*;
 use serde::{Deserialize, Serialize};
 
-use crate::core::request::{LspRequest, RequestId, RequestMessage};
+use crate::messages::core::request::{LspRequest, RequestId, RequestMessage};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]

@@ -17,7 +17,7 @@ pub mod errors {
     use lsp_types::request::ShowMessageRequest;
     use serde::{Deserialize, Serialize};
 
-    use crate::{
+    use crate::messages::{
         codec::DecodeError,
         core::{
             request::RequestId,

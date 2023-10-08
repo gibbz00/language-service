@@ -26,7 +26,7 @@ pub mod tests {
     use lsp_types::request::Shutdown;
     use serde::{Deserialize, Serialize};
 
-    use crate::core::response::{tests::SHUTDOWN_RESPONSE_MOCK, ResponseMessage};
+    use crate::messages::core::response::{tests::SHUTDOWN_RESPONSE_MOCK, ResponseMessage};
 
     use super::MessageGroup;
 

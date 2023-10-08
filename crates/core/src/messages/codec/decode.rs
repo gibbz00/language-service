@@ -2,9 +2,12 @@ use bytes::{Buf, BytesMut};
 use derive_more::{Display, From};
 use tokio_util::codec::Decoder;
 
-use crate::{codec::headers::JsonRpcHeaders, groups::MessageGroup};
+use crate::messages::{
+    groups::MessageGroup,
+    payload::headers::{HeadersParseError, JsonRpcHeaders},
+};
 
-use super::{headers::HeadersParseError, LanguageServerCodec};
+use super::LanguageServerCodec;
 
 #[derive(Debug, Display, From)]
 pub enum DecodeError {
@@ -69,12 +72,12 @@ impl<M: MessageGroup> Decoder for LanguageServerCodec<M> {
 mod tests {
     use bytes::BufMut;
 
-    use crate::{
-        codec::{
-            encode::protocol_message::tests::PROTOCOL_MESSAGE,
-            headers::{CONTENT_TYPE_HEADER_NAME, JSON_RPC_CONTENT_TYPE},
-        },
+    use crate::messages::{
         groups::tests::{MockAgentMessage, AGENT_MESSAGE_MOCK},
+        payload::{
+            headers::{CONTENT_TYPE_HEADER_NAME, JSON_RPC_CONTENT_TYPE},
+            tests::PROTOCOL_MESSAGE,
+        },
     };
 
     use super::*;

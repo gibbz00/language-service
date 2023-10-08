@@ -1,13 +1,12 @@
 mod decode;
 mod encode;
-mod headers;
 
 pub use decode::DecodeError;
 pub use encode::EncodeError;
 
 use std::marker::PhantomData;
 
-use crate::groups::MessageGroup;
+use crate::messages::groups::MessageGroup;
 
 pub struct LanguageServerCodec<M: MessageGroup> {
     known_content_length: Option<usize>,

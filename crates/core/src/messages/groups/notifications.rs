@@ -1,7 +1,7 @@
 use lsp_types::notification::*;
 use serde::{Deserialize, Serialize};
 
-use crate::core::notification::NotificationMessage;
+use crate::messages::core::notification::NotificationMessage;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
