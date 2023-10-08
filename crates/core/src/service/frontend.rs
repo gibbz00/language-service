@@ -34,7 +34,8 @@ pub struct ServiceFrontend<I: AsyncRead + Unpin, O: AsyncWrite + Unpin> {
     backend_rx: UnboundedReceiver<AllMessages>,
 }
 
-#[allow(unused)]
+// TEMP:
+#[allow(dead_code)]
 impl<I: AsyncRead + Unpin, O: AsyncWrite + Unpin> ServiceFrontend<I, O> {
     pub fn new(
         read_input: I,
@@ -147,9 +148,14 @@ impl<I: AsyncRead + Unpin, O: AsyncWrite + Unpin> ServiceFrontend<I, O> {
 
 #[cfg(test)]
 mod tests {
-    use tokio::io::{AsyncWriteExt, DuplexStream};
+    use bytes::BytesMut;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
+    use tokio_util::codec::Decoder;
 
-    use crate::messages::{groups::tests::MESSAGE_MOCK, payload::Payload};
+    use crate::{
+        messages::{groups::tests::MESSAGE_MOCK, payload::Payload},
+        service::error::FRONTEND_INPUT_CLOSED,
+    };
 
     use super::*;
 
@@ -164,7 +170,7 @@ mod tests {
     impl ServiceFrontendDriver {
         const MAX_PAYLOAD_BYTES: usize = 1_000_000;
 
-        pub async fn input_message(&mut self, message: AllMessages) {
+        pub async fn send_input_message(&mut self, message: AllMessages) {
             let payload = Payload::new(message).to_string();
 
             let bytes_written = self.input_handle.write(payload.as_bytes()).await.unwrap();
@@ -178,8 +184,27 @@ mod tests {
             }
         }
 
+        pub async fn get_output_message(&mut self) -> Option<AllMessages> {
+            let mut buffer = vec![0u8; Self::MAX_PAYLOAD_BYTES];
+            let bytes_read = self
+                .output_handle
+                .read(&mut buffer)
+                .await
+                .expect(OUTPUT_CLOSED);
+
+            LanguageServerCodec::default()
+                .decode(&mut BytesMut::from(&buffer[..bytes_read]))
+                .expect("invalid payload encoding")
+        }
+
         pub async fn get_message_at_backend(&mut self) -> Option<AllMessages> {
             self.backend_rx.next().await
+        }
+
+        pub fn send_message_from_backend(&mut self, message: AllMessages) {
+            self.backend_tx
+                .unbounded_send(message)
+                .expect(FRONTEND_INPUT_CLOSED)
         }
 
         pub async fn tick(&mut self) {
@@ -212,10 +237,23 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn forwards_payload_to_backend() {
         let mut service_frontend_harness = ServiceFrontendDriver::default();
-        service_frontend_harness.input_message(MESSAGE_MOCK).await;
+        service_frontend_harness
+            .send_input_message(MESSAGE_MOCK)
+            .await;
         service_frontend_harness.tick().await;
         assert!(service_frontend_harness
             .get_message_at_backend()
+            .await
+            .is_some_and(|message| message == MESSAGE_MOCK))
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn outputs_payload_from_backend() {
+        let mut service_frontend_harness = ServiceFrontendDriver::default();
+        service_frontend_harness.send_message_from_backend(MESSAGE_MOCK);
+        service_frontend_harness.tick().await;
+        assert!(service_frontend_harness
+            .get_output_message()
             .await
             .is_some_and(|message| message == MESSAGE_MOCK))
     }

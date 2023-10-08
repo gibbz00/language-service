@@ -18,10 +18,12 @@ impl<M: MessageGroup> Encoder<M> for LanguageServerCodec<M> {
     type Error = EncodeError;
 
     fn encode(&mut self, item: M, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        let protocol_message_str = Payload::new(item).to_string();
-        dst.reserve(protocol_message_str.len());
+        let payload = Payload::new(item).to_string();
+        if dst.capacity() < payload.len() {
+            dst.reserve(payload.len() - dst.capacity());
+        }
         let mut writer = dst.writer();
-        write!(writer, "{}", protocol_message_str)?;
+        write!(writer, "{}", payload)?;
         writer.flush()?;
 
         Ok(())
@@ -37,14 +39,14 @@ mod tests {
     #[test]
     fn encodes_message() {
         let mut language_server_codec = LanguageServerCodec::<AllMessages>::default();
-        let mut message_buffer = BytesMut::new();
+        let mut payload_buffer = BytesMut::new();
         language_server_codec
-            .encode(MESSAGE_MOCK, &mut message_buffer)
+            .encode(MESSAGE_MOCK, &mut payload_buffer)
             .unwrap();
 
         assert_eq!(
             &Payload::new(MESSAGE_MOCK).to_string(),
-            std::str::from_utf8(&message_buffer).unwrap()
+            std::str::from_utf8(&payload_buffer).unwrap()
         )
     }
 }
