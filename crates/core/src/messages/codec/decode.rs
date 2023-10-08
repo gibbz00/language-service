@@ -77,7 +77,7 @@ mod tests {
         groups::{tests::MESSAGE_MOCK, AllMessages},
         payload::{
             headers::{CONTENT_TYPE_HEADER_NAME, JSON_RPC_CONTENT_TYPE},
-            tests::PAYLOAD_MOCK,
+            tests::PAYLOAD_STR_MOCK,
         },
     };
 
@@ -94,7 +94,7 @@ mod tests {
             message_bytes: &mut BytesMut,
             codec: &mut LanguageServerCodec<AllMessages>,
         ) {
-            message_bytes.put(PAYLOAD_MOCK.as_bytes());
+            message_bytes.put(PAYLOAD_STR_MOCK.as_bytes());
             assert_eq!(MESSAGE_MOCK, codec.decode(message_bytes).unwrap().unwrap())
         }
     }

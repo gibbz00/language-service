@@ -30,8 +30,8 @@ pub struct ServiceFrontend<I: AsyncRead + Unpin, O: AsyncWrite + Unpin> {
     framed_input: FramedInput<I>,
     framed_output: FramedOutputLock<O>,
     framed_output_clone: FramedOutputLock<O>,
-    to_backend_tx: UnboundedSender<AllMessages>,
-    from_backend_rx: UnboundedReceiver<AllMessages>,
+    backend_tx: UnboundedSender<AllMessages>,
+    backend_rx: UnboundedReceiver<AllMessages>,
 }
 
 #[allow(unused)]
@@ -39,8 +39,8 @@ impl<I: AsyncRead + Unpin, O: AsyncWrite + Unpin> ServiceFrontend<I, O> {
     pub fn new(
         read_input: I,
         write_output: O,
-        to_backend_tx: UnboundedSender<AllMessages>,
-        from_backend_rx: UnboundedReceiver<AllMessages>,
+        backend_tx: UnboundedSender<AllMessages>,
+        backend_rx: UnboundedReceiver<AllMessages>,
     ) -> Self {
         let framed_output = Arc::new(Mutex::new(FramedWrite::new(
             write_output,
@@ -54,8 +54,8 @@ impl<I: AsyncRead + Unpin, O: AsyncWrite + Unpin> ServiceFrontend<I, O> {
             ),
             framed_output_clone: framed_output.clone(),
             framed_output,
-            to_backend_tx,
-            from_backend_rx,
+            backend_tx,
+            backend_rx,
         }
     }
 
@@ -67,11 +67,11 @@ impl<I: AsyncRead + Unpin, O: AsyncWrite + Unpin> ServiceFrontend<I, O> {
 
     pub async fn tick(&mut self) {
         join!(
-            Self::forward_from_backend(&self.framed_output, &mut self.from_backend_rx),
+            Self::forward_from_backend(&self.framed_output, &mut self.backend_rx),
             Self::forward_to_backend(
                 &self.framed_output_clone,
                 &mut self.framed_input,
-                &self.to_backend_tx
+                &self.backend_tx
             )
         );
     }
@@ -98,10 +98,9 @@ impl<I: AsyncRead + Unpin, O: AsyncWrite + Unpin> ServiceFrontend<I, O> {
     async fn forward_to_backend(
         framed_write_lock: &FramedOutputLock<O>,
         framed_read_input: &mut FramedRead<I, LanguageServerCodec<AllMessages>>,
-        to_backend_tx: &UnboundedSender<AllMessages>,
+        backend_tx: &UnboundedSender<AllMessages>,
     ) {
-        if let Err(response_error) = try_forward_read_input(framed_read_input, to_backend_tx).await
-        {
+        if let Err(response_error) = try_forward_read_input(framed_read_input, backend_tx).await {
             let is_recoverable = response_error.is_recoverable();
             framed_write_lock
                 .lock()
@@ -117,7 +116,7 @@ impl<I: AsyncRead + Unpin, O: AsyncWrite + Unpin> ServiceFrontend<I, O> {
 
         async fn try_forward_read_input<I: AsyncRead + Unpin>(
             framed_read_input: &mut FramedRead<I, LanguageServerCodec<AllMessages>>,
-            to_backend_tx: &UnboundedSender<AllMessages>,
+            backend_tx: &UnboundedSender<AllMessages>,
         ) -> Result<(), ResponseErrors> {
             if let Some(Some(message_decode_attempt)) = framed_read_input.next().now_or_never() {
                 match message_decode_attempt {
@@ -128,7 +127,7 @@ impl<I: AsyncRead + Unpin, O: AsyncWrite + Unpin> ServiceFrontend<I, O> {
                             AllMessages::Responses(_) | AllMessages::Notifications(_) => None,
                         };
 
-                        if to_backend_tx.unbounded_send(message).is_err() {
+                        if backend_tx.unbounded_send(message).is_err() {
                             return Err(InternalErrorResponse::new(
                                 request_id,
                                 BACKEND_INPUT_CLOSED,
@@ -148,34 +147,76 @@ impl<I: AsyncRead + Unpin, O: AsyncWrite + Unpin> ServiceFrontend<I, O> {
 
 #[cfg(test)]
 mod tests {
-    use tokio::io::AsyncWriteExt;
+    use tokio::io::{AsyncWriteExt, DuplexStream};
 
-    use crate::messages::{groups::tests::MESSAGE_MOCK, payload::tests::PAYLOAD_MOCK};
+    use crate::messages::{groups::tests::MESSAGE_MOCK, payload::Payload};
 
     use super::*;
 
+    struct ServiceFrontendDriver {
+        service_frontend: ServiceFrontend<DuplexStream, DuplexStream>,
+        backend_tx: UnboundedSender<AllMessages>,
+        backend_rx: UnboundedReceiver<AllMessages>,
+        input_handle: DuplexStream,
+        output_handle: DuplexStream,
+    }
+
+    impl ServiceFrontendDriver {
+        const MAX_PAYLOAD_BYTES: usize = 1_000_000;
+
+        pub async fn input_message(&mut self, message: AllMessages) {
+            let payload = Payload::new(message).to_string();
+
+            let bytes_written = self.input_handle.write(payload.as_bytes()).await.unwrap();
+            let payload_size = payload.as_bytes().len();
+
+            if bytes_written < payload_size {
+                panic!(
+                    "unable to send payload in one write, payload size: {}, bytes_written: {}",
+                    payload_size, bytes_written
+                )
+            }
+        }
+
+        pub async fn get_message_at_backend(&mut self) -> Option<AllMessages> {
+            self.backend_rx.next().await
+        }
+
+        pub async fn tick(&mut self) {
+            self.service_frontend.tick().await
+        }
+    }
+
+    impl Default for ServiceFrontendDriver {
+        fn default() -> Self {
+            let (frontend_tx, backend_rx) = futures::channel::mpsc::unbounded::<AllMessages>();
+            let (backend_tx, frontend_rx) = futures::channel::mpsc::unbounded::<AllMessages>();
+            let (service_input, input_handle) = tokio::io::duplex(Self::MAX_PAYLOAD_BYTES);
+            let (service_output, output_handle) = tokio::io::duplex(Self::MAX_PAYLOAD_BYTES);
+
+            Self {
+                service_frontend: ServiceFrontend::new(
+                    service_input,
+                    service_output,
+                    frontend_tx,
+                    frontend_rx,
+                ),
+                backend_tx,
+                backend_rx,
+                input_handle,
+                output_handle,
+            }
+        }
+    }
+
     #[test_log::test(tokio::test)]
     async fn forwards_payload_to_backend() {
-        let (_to_frontend_tx, from_backend_rx) = futures::channel::mpsc::unbounded::<AllMessages>();
-        let (to_backend_tx, mut from_frontend_rx) =
-            futures::channel::mpsc::unbounded::<AllMessages>();
-
-        let (service_input, mut input_handle) = tokio::io::duplex(2000);
-        let (service_output, _output_handle) = tokio::io::duplex(2000);
-
-        let mut service_frontend = ServiceFrontend::new(
-            service_input,
-            service_output,
-            to_backend_tx,
-            from_backend_rx,
-        );
-
-        let bytes_written = input_handle.write(PAYLOAD_MOCK.as_bytes()).await.unwrap();
-        // TODO: assert that bytes written == payload.length
-        println!("{:?}", bytes_written);
-
-        service_frontend.tick().await;
-
-        assert_eq!(MESSAGE_MOCK, from_frontend_rx.next().await.unwrap());
+        let mut service_frontend_harness = ServiceFrontendDriver::default();
+        service_frontend_harness.input_message(MESSAGE_MOCK).await;
+        service_frontend_harness.tick().await;
+        assert!(service_frontend_harness
+            .get_message_at_backend()
+            .await
+            .is_some_and(|message| message == MESSAGE_MOCK))
     }
 }
