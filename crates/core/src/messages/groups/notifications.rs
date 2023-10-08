@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::messages::core::notification::NotificationMessage;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AllNotifications {
     Client(AllClientNotifications),
@@ -11,7 +11,7 @@ pub enum AllNotifications {
     ImplementationDependent(AllImplementationNotifications),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AllClientNotifications {
     LogTrace(NotificationMessage<LogTrace>),
@@ -21,7 +21,7 @@ pub enum AllClientNotifications {
     Telemetry(NotificationMessage<TelemetryEvent>),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum AllServerNotifications {
     Initialized(NotificationMessage<Initialized>),
     SetTrace(NotificationMessage<SetTrace>),
@@ -44,7 +44,7 @@ pub enum AllServerNotifications {
     DidChangeWatcheFiles(NotificationMessage<DidChangeWatchedFiles>),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AllImplementationNotifications {
     CancelRequest(NotificationMessage<Cancel>),

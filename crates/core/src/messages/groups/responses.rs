@@ -1,15 +1,24 @@
+use lsp_types::request::*;
 use serde::{Deserialize, Serialize};
+
+use crate::messages::core::response::ResponseMessage;
 
 use self::errors::*;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AllResponses {
     // TODO:
     // Client(AllClientResponses),
-    // Server(AllServerResponses),
+    Server(AllServerResponses),
     DecodeError(DecodeErrorResponse),
     InternalError(InternalErrorResponse),
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum AllServerResponses {
+    Shutdown(ResponseMessage<Shutdown>),
 }
 
 pub mod errors {
@@ -58,7 +67,7 @@ pub mod errors {
     // Arbitrary generic parameter since incoming couldn't be concluded.
     type UnknownRequest = ShowMessageRequest;
 
-    #[derive(Debug, Serialize, Deserialize)]
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
     #[serde(transparent)]
     pub struct DecodeErrorResponse(ResponseMessage<UnknownRequest>);
     impl DecodeErrorResponse {
@@ -80,7 +89,7 @@ pub mod errors {
         }
     }
 
-    #[derive(Debug, Serialize, Deserialize)]
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
     #[serde(transparent)]
     pub struct InternalErrorResponse(ResponseMessage<UnknownRequest>);
     impl InternalErrorResponse {

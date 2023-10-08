@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::messages::core::request::{LspRequest, RequestId, RequestMessage};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AllRequests {
     Client(AllClientRequests),
@@ -19,7 +19,7 @@ impl LspRequest for AllRequests {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AllClientRequests {
     RegisterCapability(RequestMessage<RegisterCapability>),
@@ -55,7 +55,7 @@ impl LspRequest for AllClientRequests {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AllServerRequests {
     Initialize(RequestMessage<Initialize>),

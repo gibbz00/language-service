@@ -34,7 +34,8 @@ impl<M: MessageGroup> Decoder for LanguageServerCodec<M> {
                                 self.known_content_length = Some(content_length);
                                 src.advance(parsed_src_index);
 
-                                let missing_capacity = content_length - src.capacity();
+                                let missing_capacity =
+                                    content_length.saturating_sub(src.capacity());
                                 if missing_capacity > 0 {
                                     src.reserve(missing_capacity)
                                 }
@@ -73,10 +74,10 @@ mod tests {
     use bytes::BufMut;
 
     use crate::messages::{
-        groups::tests::{MockAgentMessage, AGENT_MESSAGE_MOCK},
+        groups::{tests::MESSAGE_MOCK, AllMessages},
         payload::{
             headers::{CONTENT_TYPE_HEADER_NAME, JSON_RPC_CONTENT_TYPE},
-            tests::PROTOCOL_MESSAGE,
+            tests::PAYLOAD_MOCK,
         },
     };
 
@@ -85,19 +86,16 @@ mod tests {
     #[test]
     fn decodes_messages() {
         let mut message_bytes = BytesMut::new();
-        let mut codec = LanguageServerCodec::<MockAgentMessage>::default();
+        let mut codec = LanguageServerCodec::<AllMessages>::default();
         decode_message(&mut message_bytes, &mut codec);
         decode_message(&mut message_bytes, &mut codec);
 
         fn decode_message(
             message_bytes: &mut BytesMut,
-            codec: &mut LanguageServerCodec<MockAgentMessage>,
+            codec: &mut LanguageServerCodec<AllMessages>,
         ) {
-            message_bytes.put(PROTOCOL_MESSAGE.as_bytes());
-            assert_eq!(
-                AGENT_MESSAGE_MOCK,
-                codec.decode(message_bytes).unwrap().unwrap()
-            )
+            message_bytes.put(PAYLOAD_MOCK.as_bytes());
+            assert_eq!(MESSAGE_MOCK, codec.decode(message_bytes).unwrap().unwrap())
         }
     }
 
@@ -107,7 +105,7 @@ mod tests {
             format!("{}: {}", CONTENT_TYPE_HEADER_NAME, JSON_RPC_CONTENT_TYPE).as_str(),
         );
 
-        let mut codec = LanguageServerCodec::<MockAgentMessage>::default();
+        let mut codec = LanguageServerCodec::<AllMessages>::default();
         assert!(codec.decode(&mut message_bytes).unwrap().is_none())
     }
 
@@ -115,7 +113,7 @@ mod tests {
     fn ok_on_partial_headers() {
         let mut message_bytes = BytesMut::from("cont");
 
-        let mut codec = LanguageServerCodec::<MockAgentMessage>::default();
+        let mut codec = LanguageServerCodec::<AllMessages>::default();
         assert!(codec.decode(&mut message_bytes).unwrap().is_none())
     }
 
@@ -129,7 +127,7 @@ mod tests {
             .as_str(),
         );
 
-        let mut codec = LanguageServerCodec::<MockAgentMessage>::default();
+        let mut codec = LanguageServerCodec::<AllMessages>::default();
         assert!(codec.decode(&mut message_bytes).unwrap().is_none())
     }
 
@@ -140,7 +138,7 @@ mod tests {
             format!("{}\r\nsomething", JsonRpcHeaders { content_length: 1 }).as_str(),
         );
 
-        let mut codec = LanguageServerCodec::<MockAgentMessage>::default();
+        let mut codec = LanguageServerCodec::<AllMessages>::default();
         let _ = codec.decode(&mut message_bytes);
     }
 }

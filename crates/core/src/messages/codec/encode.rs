@@ -30,20 +30,20 @@ impl<M: MessageGroup> Encoder<M> for LanguageServerCodec<M> {
 
 #[cfg(test)]
 mod tests {
-    use crate::messages::groups::tests::{MockAgentMessage, AGENT_MESSAGE_MOCK};
+    use crate::messages::groups::{tests::MESSAGE_MOCK, AllMessages};
 
     use super::*;
 
     #[test]
     fn encodes_message() {
-        let mut language_server_codec = LanguageServerCodec::<MockAgentMessage>::default();
+        let mut language_server_codec = LanguageServerCodec::<AllMessages>::default();
         let mut message_buffer = BytesMut::new();
         language_server_codec
-            .encode(AGENT_MESSAGE_MOCK, &mut message_buffer)
+            .encode(MESSAGE_MOCK, &mut message_buffer)
             .unwrap();
 
         assert_eq!(
-            &Payload::try_new(AGENT_MESSAGE_MOCK).unwrap().to_string(),
+            &Payload::try_new(MESSAGE_MOCK).unwrap().to_string(),
             std::str::from_utf8(&message_buffer).unwrap()
         )
     }

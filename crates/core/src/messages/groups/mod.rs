@@ -11,7 +11,7 @@ use self::{notifications::AllNotifications, requests::AllRequests, responses::Al
 
 pub trait MessageGroup: Serialize + DeserializeOwned {}
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AllMessages {
     Requests(AllRequests),
@@ -23,21 +23,14 @@ impl MessageGroup for AllMessages {}
 
 #[cfg(test)]
 pub mod tests {
-    use lsp_types::request::Shutdown;
-    use serde::{Deserialize, Serialize};
+    use crate::messages::core::response::tests::SHUTDOWN_RESPONSE_MOCK;
 
-    use crate::messages::core::response::{tests::SHUTDOWN_RESPONSE_MOCK, ResponseMessage};
+    use super::{
+        responses::{AllResponses, AllServerResponses},
+        AllMessages,
+    };
 
-    use super::MessageGroup;
-
-    #[derive(Debug, PartialEq, Serialize, Deserialize)]
-    #[serde(untagged)]
-    pub enum MockAgentMessage {
-        Shutdown(ResponseMessage<Shutdown>),
-    }
-
-    impl MessageGroup for MockAgentMessage {}
-
-    pub const AGENT_MESSAGE_MOCK: MockAgentMessage =
-        MockAgentMessage::Shutdown(SHUTDOWN_RESPONSE_MOCK);
+    pub const MESSAGE_MOCK: AllMessages = AllMessages::Responses(AllResponses::Server(
+        AllServerResponses::Shutdown(SHUTDOWN_RESPONSE_MOCK),
+    ));
 }

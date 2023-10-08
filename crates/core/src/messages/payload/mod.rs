@@ -33,16 +33,16 @@ impl Display for Payload {
 pub mod tests {
     use once_cell::sync::Lazy;
 
-    use crate::messages::groups::tests::AGENT_MESSAGE_MOCK;
+    use crate::messages::groups::tests::MESSAGE_MOCK;
 
     use super::*;
 
-    pub static PROTOCOL_MESSAGE: Lazy<String> =
-        Lazy::new(|| Payload::try_new(AGENT_MESSAGE_MOCK).unwrap().to_string());
+    pub static PAYLOAD_MOCK: Lazy<String> =
+        Lazy::new(|| Payload::try_new(MESSAGE_MOCK).unwrap().to_string());
 
     #[test]
     fn displays_protocol_message() {
-        let body_string = serde_json::to_string(&AGENT_MESSAGE_MOCK).unwrap();
+        let body_string = serde_json::to_string(&MESSAGE_MOCK).unwrap();
         let expected_string = format!(
             "{}\r\n{}",
             JsonRpcHeaders {
@@ -51,6 +51,6 @@ pub mod tests {
             body_string
         );
 
-        assert_eq!(expected_string, *PROTOCOL_MESSAGE);
+        assert_eq!(expected_string, *PAYLOAD_MOCK);
     }
 }
