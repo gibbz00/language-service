@@ -8,11 +8,11 @@ use self::errors::*;
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AllResponses {
+    DecodeError(DecodeErrorResponse),
+    InternalError(InternalErrorResponse),
     // TODO:
     // Client(AllClientResponses),
     Server(AllServerResponses),
-    DecodeError(DecodeErrorResponse),
-    InternalError(InternalErrorResponse),
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]

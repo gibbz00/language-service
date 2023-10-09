@@ -7,8 +7,8 @@ use crate::messages::groups::MessageGroup;
 use self::headers::JsonRpcHeaders;
 
 pub struct Payload {
-    pub header: JsonRpcHeaders,
-    pub body: String,
+    header: JsonRpcHeaders,
+    body: String,
 }
 
 impl Payload {
@@ -39,6 +39,23 @@ pub mod tests {
 
     pub static PAYLOAD_STR_MOCK: Lazy<String> =
         Lazy::new(|| Payload::new(MESSAGE_MOCK).to_string());
+
+    pub static INVALID_PAYLOAD_STR_MOCK: Lazy<String> = Lazy::new(|| {
+        let body = serde_json::json!(
+            {
+                "name": 10
+            }
+        )
+        .to_string();
+
+        Payload {
+            header: JsonRpcHeaders {
+                content_length: body.len(),
+            },
+            body,
+        }
+        .to_string()
+    });
 
     #[test]
     fn displays_protocol_message() {

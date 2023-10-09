@@ -153,7 +153,10 @@ mod tests {
     use tokio_util::codec::Decoder;
 
     use crate::{
-        messages::{groups::tests::MESSAGE_MOCK, payload::Payload},
+        messages::{
+            groups::{responses::AllResponses, tests::MESSAGE_MOCK},
+            payload::{tests::INVALID_PAYLOAD_STR_MOCK, Payload},
+        },
         service::error::FRONTEND_INPUT_CLOSED,
     };
 
@@ -171,10 +174,18 @@ mod tests {
         const MAX_PAYLOAD_BYTES: usize = 1_000_000;
 
         pub async fn send_input_message(&mut self, message: AllMessages) {
-            let payload = Payload::new(message).to_string();
+            let payload_string = Payload::new(message).to_string();
+            self.send_raw_payload_str(&payload_string).await
+        }
 
-            let bytes_written = self.input_handle.write(payload.as_bytes()).await.unwrap();
-            let payload_size = payload.as_bytes().len();
+        pub async fn send_raw_payload_str(&mut self, payload_str: &str) {
+            let bytes_written = self
+                .input_handle
+                .write(payload_str.as_bytes())
+                .await
+                .unwrap();
+
+            let payload_size = payload_str.len();
 
             if bytes_written < payload_size {
                 panic!(
@@ -256,5 +267,23 @@ mod tests {
             .get_output_message()
             .await
             .is_some_and(|message| message == MESSAGE_MOCK))
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn responds_with_decode_error_for_invalid_payload() {
+        let mut service_frontend_harness = ServiceFrontendDriver::default();
+        service_frontend_harness
+            .send_raw_payload_str(&INVALID_PAYLOAD_STR_MOCK)
+            .await;
+        service_frontend_harness.tick().await;
+        assert!(service_frontend_harness
+            .get_output_message()
+            .await
+            .is_some_and(|message| {
+                matches!(
+                    message,
+                    AllMessages::Responses(AllResponses::DecodeError(_))
+                )
+            }))
     }
 }
