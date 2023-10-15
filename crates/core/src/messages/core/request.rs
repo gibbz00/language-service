@@ -1,4 +1,4 @@
-use derive_more::{Deref, Into};
+use derive_more::{Deref, From, Into};
 use lsp_types::request::Request;
 use lsp_types::NumberOrString;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
@@ -15,13 +15,13 @@ impl<R: Request> LspRequest for RequestMessage<R> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Deref, Into)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Deref, From, Into)]
 #[serde(transparent)]
 pub struct RequestId(NumberOrString);
 
 pub struct RequestMessage<R: Request> {
-    id: RequestId,
-    params: Option<R::Params>,
+    pub id: RequestId,
+    pub params: Option<R::Params>,
 }
 
 impl<R: Request> Serialize for RequestMessage<R> {
@@ -90,14 +90,14 @@ impl<R: Request> PartialEq for RequestMessage<R> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use lsp_types::{request::WillRenameFiles, RenameFilesParams};
     use once_cell::sync::Lazy;
     use serde_json::json;
 
     use super::*;
 
-    const WILL_RENAME_FILES_REQUEST_MOCK: RequestMessage<WillRenameFiles> = RequestMessage {
+    pub const WILL_RENAME_FILES_REQUEST_MOCK: RequestMessage<WillRenameFiles> = RequestMessage {
         id: RequestId(lsp_types::NumberOrString::Number(0)),
         params: Some(RenameFilesParams { files: vec![] }),
     };

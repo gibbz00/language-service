@@ -12,8 +12,8 @@ pub struct Payload {
 }
 
 impl Payload {
-    pub fn new(message: impl MessageGroup) -> Self {
-        let body = serde_json::to_string(&message).expect("unexpected serialization failure");
+    pub fn new(message: &impl MessageGroup) -> Self {
+        let body = serde_json::to_string(message).expect("unexpected serialization failure");
         Self {
             header: JsonRpcHeaders {
                 content_length: body.len(),
@@ -38,7 +38,7 @@ pub mod tests {
     use super::*;
 
     pub static PAYLOAD_STR_MOCK: Lazy<String> =
-        Lazy::new(|| Payload::new(MESSAGE_MOCK).to_string());
+        Lazy::new(|| Payload::new(&MESSAGE_MOCK).to_string());
 
     pub static INVALID_PAYLOAD_STR_MOCK: Lazy<String> = Lazy::new(|| {
         let body = serde_json::json!(

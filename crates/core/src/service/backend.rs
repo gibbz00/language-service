@@ -1,21 +1,38 @@
-use crate::messages::groups::{
-    notifications::{AllClientNotifications, AllServerNotifications},
-    requests::{AllClientRequests, AllServerRequests},
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
+
+use crate::service::error::BACKEND_INPUT_CLOSED;
+
+use super::{
+    error::BACKEND_OUTPUT_CLOSED,
+    filter::{IncomingMessage, MessageFilter, OutgoingMessage},
 };
 
-trait ServiceBackend {
-    type OutgoingRequests;
-    type OutgoingNotifications;
-    type IncomingRequests;
-    type IncomingNotifications;
+pub(crate) struct ServiceBackend<F: MessageFilter> {
+    backend_rx: UnboundedReceiver<IncomingMessage<F>>,
+    backend_tx: UnboundedSender<OutgoingMessage<F>>,
 }
 
-// TODO: move into a spique-client crate
-struct ClientServiceBackend;
+impl<F: MessageFilter> ServiceBackend<F> {
+    pub fn new(
+        backend_rx: UnboundedReceiver<IncomingMessage<F>>,
+        backend_tx: UnboundedSender<OutgoingMessage<F>>,
+    ) -> Self {
+        Self {
+            backend_rx,
+            backend_tx,
+        }
+    }
 
-impl ServiceBackend for ClientServiceBackend {
-    type OutgoingRequests = AllServerRequests;
-    type OutgoingNotifications = AllServerNotifications;
-    type IncomingRequests = AllClientRequests;
-    type IncomingNotifications = AllClientNotifications;
+    pub fn get_incoming(&mut self) -> Option<IncomingMessage<F>> {
+        match self.backend_rx.try_next() {
+            Ok(message_result) => Some(message_result.expect(BACKEND_INPUT_CLOSED)),
+            Err(_) => None,
+        }
+    }
+
+    pub fn send_outgoing(&self, message: OutgoingMessage<F>) {
+        self.backend_tx
+            .unbounded_send(message)
+            .expect(BACKEND_OUTPUT_CLOSED)
+    }
 }

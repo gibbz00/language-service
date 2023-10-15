@@ -5,7 +5,17 @@ use self::response_error::ResponseError;
 
 use super::{request::RequestId, version::Version};
 
-#[derive(Debug, Eq, Hash, PartialEq, Deserialize, Serialize)]
+pub trait LspResponse {
+    fn response_id(&self) -> &ResponseId;
+}
+
+impl<R: Request> LspResponse for ResponseMessage<R> {
+    fn response_id(&self) -> &ResponseId {
+        &self.id
+    }
+}
+
+#[derive(Debug, Clone, Eq, Hash, PartialEq, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum ResponseId {
     Number(i32),

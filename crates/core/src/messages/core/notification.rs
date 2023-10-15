@@ -4,7 +4,7 @@ use serde::{ser::SerializeMap, Deserialize, Serialize};
 use super::version::Version;
 
 pub struct NotificationMessage<N: Notification> {
-    params: Option<N::Params>,
+    pub params: Option<N::Params>,
 }
 
 impl<R: Notification> Serialize for NotificationMessage<R> {

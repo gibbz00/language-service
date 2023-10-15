@@ -59,7 +59,7 @@ impl LspRequest for AllClientRequests {
 #[serde(untagged)]
 pub enum AllServerRequests {
     Initialize(RequestMessage<Initialize>),
-    ShutDown(RequestMessage<Shutdown>),
+    Shutdown(RequestMessage<Shutdown>),
     WillSaveWaitUntilTextDocument(RequestMessage<WillSaveWaitUntil>),
     GotoDeclaration(RequestMessage<GotoDeclaration>),
     GotoDefinition(RequestMessage<GotoDefinition>),
@@ -116,7 +116,7 @@ impl LspRequest for AllServerRequests {
     fn request_id(&self) -> &RequestId {
         match self {
             AllServerRequests::Initialize(request) => request.request_id(),
-            AllServerRequests::ShutDown(request) => request.request_id(),
+            AllServerRequests::Shutdown(request) => request.request_id(),
             AllServerRequests::WillSaveWaitUntilTextDocument(request) => request.request_id(),
             AllServerRequests::GotoDeclaration(request) => request.request_id(),
             AllServerRequests::GotoDefinition(request) => request.request_id(),
@@ -167,6 +167,57 @@ impl LspRequest for AllServerRequests {
             AllServerRequests::WillRenameFiles(request) => request.request_id(),
             AllServerRequests::WillDeleteFiles(request) => request.request_id(),
             AllServerRequests::ExecuteCommand(request) => request.request_id(),
+        }
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use crate::messages::{
+        core::response::response_error::{
+            ReservedResponseErrorCodes, ResponseError, ResponseErrorCode,
+        },
+        groups::responses::errors::InvalidMessageResponse,
+    };
+
+    use super::*;
+
+    #[derive(Debug, PartialEq)]
+    pub enum SomeRequestsMock {
+        WillRenameFiles(RequestMessage<WillRenameFiles>),
+    }
+
+    impl From<SomeRequestsMock> for AllRequests {
+        fn from(some_requests: SomeRequestsMock) -> Self {
+            match some_requests {
+                SomeRequestsMock::WillRenameFiles(request) => {
+                    AllRequests::Server(AllServerRequests::WillRenameFiles(request))
+                }
+            }
+        }
+    }
+
+    impl TryFrom<AllRequests> for SomeRequestsMock {
+        type Error = InvalidMessageResponse;
+
+        fn try_from(all_requests: AllRequests) -> Result<Self, Self::Error> {
+            match all_requests {
+                AllRequests::Server(AllServerRequests::WillRenameFiles(request)) => {
+                    Ok(SomeRequestsMock::WillRenameFiles(request))
+                }
+                request => Err(InvalidMessageResponse::new(
+                    None,
+                    ResponseError {
+                        code: ResponseErrorCode::Reserved(
+                            ReservedResponseErrorCodes::InternalError,
+                        ),
+                        message: "Invalid request.".to_string(),
+                        data: Some(
+                            serde_json::to_value(request).expect("request not serializable"),
+                        ),
+                    },
+                )),
+            }
         }
     }
 }

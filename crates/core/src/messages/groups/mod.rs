@@ -9,6 +9,8 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use self::{notifications::AllNotifications, requests::AllRequests, responses::AllResponses};
 
+use super::core::{LspRequest, RequestId};
+
 pub trait MessageGroup: Serialize + DeserializeOwned {}
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -19,18 +21,26 @@ pub enum AllMessages {
     Notifications(AllNotifications),
 }
 
+impl AllMessages {
+    pub fn request_id(&self) -> Option<&RequestId> {
+        match self {
+            AllMessages::Requests(request) => Some(request.request_id()),
+            AllMessages::Responses(_) | AllMessages::Notifications(_) => None,
+        }
+    }
+}
+
 impl MessageGroup for AllMessages {}
 
 #[cfg(test)]
 pub mod tests {
-    use crate::messages::core::response::tests::SHUTDOWN_RESPONSE_MOCK;
+    use crate::messages::core::request::tests::WILL_RENAME_FILES_REQUEST_MOCK;
 
     use super::{
-        responses::{AllResponses, AllServerResponses},
+        requests::{AllRequests::Server, AllServerRequests::WillRenameFiles},
         AllMessages,
     };
 
-    pub const MESSAGE_MOCK: AllMessages = AllMessages::Responses(AllResponses::Server(
-        AllServerResponses::Shutdown(SHUTDOWN_RESPONSE_MOCK),
-    ));
+    pub const MESSAGE_MOCK: AllMessages =
+        AllMessages::Requests(Server(WillRenameFiles(WILL_RENAME_FILES_REQUEST_MOCK)));
 }
