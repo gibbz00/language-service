@@ -53,13 +53,6 @@ pub enum AllImplementationNotifications {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::messages::{
-        core::response::response_error::{
-            ReservedResponseErrorCodes, ResponseError, ResponseErrorCode::Reserved,
-        },
-        groups::responses::errors::InvalidMessageResponse,
-    };
-
     use super::*;
 
     #[derive(Debug, PartialEq)]
@@ -78,24 +71,14 @@ pub mod tests {
     }
 
     impl TryFrom<AllNotifications> for SomeNotificationsMock {
-        type Error = InvalidMessageResponse;
+        type Error = AllNotifications;
 
         fn try_from(all_notifications: AllNotifications) -> Result<Self, Self::Error> {
             match all_notifications {
                 AllNotifications::Server(AllServerNotifications::Exit(notification)) => {
                     Ok(SomeNotificationsMock::Exit(notification))
                 }
-                notification => Err(InvalidMessageResponse::new(
-                    None,
-                    ResponseError {
-                        code: Reserved(ReservedResponseErrorCodes::InternalError),
-                        message: "Invalid notification.".to_string(),
-                        data: Some(
-                            serde_json::to_value(notification)
-                                .expect("notification not serializable"),
-                        ),
-                    },
-                )),
+                notification => Err(notification),
             }
         }
     }

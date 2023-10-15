@@ -1,6 +1,6 @@
 mod backend;
 mod error;
-mod filter;
+pub(crate) mod filter;
 mod frontend;
 
 // TODO: place behind feature flag for usage in other crates
@@ -120,11 +120,7 @@ pub mod driver {
 mod tests {
     use crate::{
         messages::{
-            groups::{
-                responses::{errors::ResponseErrors, AllResponses},
-                tests::MESSAGE_MOCK,
-                AllMessages,
-            },
+            groups::{responses::AllResponses, tests::MESSAGE_MOCK, AllMessages},
             payload::tests::INVALID_PAYLOAD_STR_MOCK,
         },
         service::{
@@ -160,7 +156,7 @@ mod tests {
             .await
             .is_some_and(|message| matches!(
                 message,
-                AllMessages::Responses(AllResponses::ResponseErrors(_))
+                AllMessages::Responses(AllResponses::ResponseError(_))
             )))
     }
 
@@ -188,7 +184,7 @@ mod tests {
             .is_some_and(|message| {
                 matches!(
                     message,
-                    AllMessages::Responses(AllResponses::ResponseErrors(ResponseErrors::Decode(_)))
+                    AllMessages::Responses(AllResponses::ResponseError(_))
                 )
             }))
     }

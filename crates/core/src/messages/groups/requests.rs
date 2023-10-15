@@ -173,13 +173,6 @@ impl LspRequest for AllServerRequests {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::messages::{
-        core::response::response_error::{
-            ReservedResponseErrorCodes, ResponseError, ResponseErrorCode,
-        },
-        groups::responses::errors::InvalidMessageResponse,
-    };
-
     use super::*;
 
     #[derive(Debug, PartialEq)]
@@ -198,25 +191,14 @@ pub mod tests {
     }
 
     impl TryFrom<AllRequests> for SomeRequestsMock {
-        type Error = InvalidMessageResponse;
+        type Error = AllRequests;
 
         fn try_from(all_requests: AllRequests) -> Result<Self, Self::Error> {
             match all_requests {
                 AllRequests::Server(AllServerRequests::WillRenameFiles(request)) => {
                     Ok(SomeRequestsMock::WillRenameFiles(request))
                 }
-                request => Err(InvalidMessageResponse::new(
-                    None,
-                    ResponseError {
-                        code: ResponseErrorCode::Reserved(
-                            ReservedResponseErrorCodes::InternalError,
-                        ),
-                        message: "Invalid request.".to_string(),
-                        data: Some(
-                            serde_json::to_value(request).expect("request not serializable"),
-                        ),
-                    },
-                )),
+                request => Err(request),
             }
         }
     }

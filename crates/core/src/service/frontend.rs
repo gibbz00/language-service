@@ -3,10 +3,7 @@ use std::sync::Arc;
 use crate::{
     messages::{
         codec::LanguageServerCodec,
-        groups::{
-            responses::errors::{DecodeErrorResponse, ResponseErrors},
-            AllMessages,
-        },
+        groups::{responses::errors::DecodeErrorResponse, AllMessages},
     },
     service::error::{MESSAGE_FILTER_INPUT_CLOSED, MESSAGE_FILTER_OUTPUT_CLOSED},
 };
@@ -106,7 +103,7 @@ impl<I: AsyncRead + Unpin, O: AsyncWrite + Unpin> ServiceFrontend<I, O> {
                     framed_write_lock
                         .lock()
                         .await
-                        .send(ResponseErrors::Decode(DecodeErrorResponse::new(err)).into())
+                        .send(DecodeErrorResponse::create(err).into())
                         .await
                         .expect(OUTPUT_CLOSED);
                 }

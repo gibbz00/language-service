@@ -3,14 +3,25 @@ use std::marker::PhantomData;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
-    messages::groups::{
-        notifications::AllNotifications,
-        requests::AllRequests,
-        responses::{
-            errors::{InvalidMessageResponse, ResponseErrors},
-            AllResponses,
+    messages::{
+        core::{
+            response::{
+                response_error::{
+                    ReservedResponseErrorCodes, ResponseError, ResponseErrorCode::Reserved,
+                },
+                LspResponse, ResponseId, ResponseMessage,
+            },
+            LspRequest,
         },
-        AllMessages,
+        groups::{
+            notifications::AllNotifications,
+            requests::AllRequests,
+            responses::{
+                errors::{ErrorResponse, InvalidMessageResponse},
+                AllResponses,
+            },
+            AllMessages,
+        },
     },
     service::error::BACKEND_OUTPUT_CLOSED,
 };
@@ -66,7 +77,7 @@ impl<F: MessageFilter> ServiceMessageFilter<F> {
                     .expect(BACKEND_INPUT_CLOSED),
                 Err(try_from_err) => {
                     self.frontend_tx
-                        .unbounded_send(ResponseErrors::from(try_from_err).into())
+                        .unbounded_send(try_from_err.into())
                         .expect(FRONTEND_INPUT_CLOSED);
                 }
             }
@@ -78,9 +89,9 @@ pub trait MessageFilter {
     type OutgoingNotifications: Into<AllNotifications>;
     type OutgoingRequests: Into<AllRequests>;
     type OutgoingResponses: Into<AllResponses>;
-    type IncomingNotifications: TryFrom<AllNotifications, Error = InvalidMessageResponse>;
-    type IncomingRequests: TryFrom<AllRequests, Error = InvalidMessageResponse>;
-    type IncomingResponses: TryFrom<AllResponses, Error = InvalidMessageResponse>;
+    type IncomingNotifications: TryFrom<AllNotifications, Error = AllNotifications>;
+    type IncomingRequests: TryFrom<AllRequests, Error = AllRequests>;
+    type IncomingResponses: TryFrom<AllResponses, Error = AllResponses>;
 }
 
 #[derive(Debug, PartialEq)]
@@ -91,15 +102,44 @@ pub enum IncomingMessage<F: MessageFilter> {
 }
 
 impl<F: MessageFilter> TryFrom<AllMessages> for IncomingMessage<F> {
-    type Error = InvalidMessageResponse;
+    type Error = ResponseMessage<ErrorResponse>;
 
     fn try_from(all_messages: AllMessages) -> Result<Self, Self::Error> {
-        match all_messages {
-            AllMessages::Requests(message) => message.try_into().map(IncomingMessage::Request),
-            AllMessages::Responses(message) => message.try_into().map(IncomingMessage::Response),
-            AllMessages::Notifications(message) => {
-                message.try_into().map(IncomingMessage::Notification)
+        return match all_messages {
+            AllMessages::Requests(message) => message
+                .try_into()
+                .map(IncomingMessage::Request)
+                .map_err(|request: AllRequests| {
+                    invalid_message::<F>(AllMessages::Requests(request))
+                }),
+            AllMessages::Responses(message) => {
+                message.try_into().map(IncomingMessage::Response).map_err(
+                    |response: AllResponses| invalid_message::<F>(AllMessages::Responses(response)),
+                )
             }
+            AllMessages::Notifications(message) => message
+                .try_into()
+                .map(IncomingMessage::Notification)
+                .map_err(|notification| {
+                    invalid_message::<F>(AllMessages::Notifications(notification))
+                }),
+        };
+
+        fn invalid_message<F: MessageFilter>(
+            message: AllMessages,
+        ) -> ResponseMessage<ErrorResponse> {
+            InvalidMessageResponse::create(
+                match &message {
+                    AllMessages::Requests(request) => request.request_id().clone().into(),
+                    AllMessages::Responses(response) => response.response_id().clone(),
+                    AllMessages::Notifications(_) => ResponseId::Null,
+                },
+                ResponseError {
+                    code: Reserved(ReservedResponseErrorCodes::InternalError),
+                    message: format!("Invalid message for {:#?}", std::any::type_name::<F>()),
+                    data: Some(serde_json::to_value(message).expect("message not serializable")),
+                },
+            )
         }
     }
 }
