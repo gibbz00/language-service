@@ -120,7 +120,11 @@ pub mod driver {
 mod tests {
     use crate::{
         messages::{
-            groups::{responses::AllResponses, tests::MESSAGE_MOCK, AllMessages},
+            core::response::{
+                response_error::{ReservedResponseErrorCodes, ResponseErrorCode},
+                ResponseMessage, UntypedResponseMessage,
+            },
+            groups::{responses::errors::ErrorResponse, tests::MESSAGE_MOCK, AllMessages},
             payload::tests::INVALID_PAYLOAD_STR_MOCK,
         },
         service::{
@@ -130,6 +134,13 @@ mod tests {
             },
         },
     };
+
+    fn assert_response_message(message: AllMessages) -> UntypedResponseMessage {
+        match message {
+            AllMessages::UntypedResponse(untyped_response) => untyped_response,
+            _ => panic!(),
+        }
+    }
 
     #[test_log::test(tokio::test)]
     async fn forwards_payload_to_backend() {
@@ -154,10 +165,13 @@ mod tests {
         assert!(service_driver
             .get_output_message()
             .await
-            .is_some_and(|message| matches!(
-                message,
-                AllMessages::Responses(AllResponses::ResponseError(_))
-            )))
+            .is_some_and(|message| {
+                let response_message = assert_response_message(message);
+                ResponseMessage::<ErrorResponse>::try_from(response_message)
+                    .unwrap()
+                    .kind
+                    .is_err_and(|err| err.message.contains("invalid message"))
+            }))
     }
 
     #[test_log::test(tokio::test)]
@@ -182,10 +196,14 @@ mod tests {
             .get_output_message()
             .await
             .is_some_and(|message| {
-                matches!(
-                    message,
-                    AllMessages::Responses(AllResponses::ResponseError(_))
-                )
+                let response_message = assert_response_message(message);
+                ResponseMessage::<ErrorResponse>::try_from(response_message)
+                    .unwrap()
+                    .kind
+                    .is_err_and(|err| {
+                        err.code
+                            == ResponseErrorCode::Reserved(ReservedResponseErrorCodes::ParseError)
+                    })
             }))
     }
 }

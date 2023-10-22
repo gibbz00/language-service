@@ -173,19 +173,34 @@ impl LspRequest for AllServerRequests {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::{
+        messages::{
+            core::response::UntypedResponseMessage, groups::responses::tests::SomeResponsesMock,
+        },
+        service::filter::{tests::FilterMock, MessageFilter, ResponseTypingFn},
+    };
+
     use super::*;
 
     #[derive(Debug, PartialEq)]
     pub enum SomeRequestsMock {
-        WillRenameFiles(RequestMessage<WillRenameFiles>),
+        ShutDown(RequestMessage<Shutdown>),
     }
 
     impl From<SomeRequestsMock> for AllRequests {
         fn from(some_requests: SomeRequestsMock) -> Self {
             match some_requests {
-                SomeRequestsMock::WillRenameFiles(request) => {
-                    AllRequests::Server(AllServerRequests::WillRenameFiles(request))
+                SomeRequestsMock::ShutDown(request) => {
+                    AllRequests::Server(AllServerRequests::Shutdown(request))
                 }
+            }
+        }
+    }
+
+    impl LspRequest for SomeRequestsMock {
+        fn request_id(&self) -> &RequestId {
+            match self {
+                SomeRequestsMock::ShutDown(request) => request.request_id(),
             }
         }
     }
@@ -195,10 +210,28 @@ pub mod tests {
 
         fn try_from(all_requests: AllRequests) -> Result<Self, Self::Error> {
             match all_requests {
-                AllRequests::Server(AllServerRequests::WillRenameFiles(request)) => {
-                    Ok(SomeRequestsMock::WillRenameFiles(request))
+                AllRequests::Server(AllServerRequests::Shutdown(request)) => {
+                    Ok(SomeRequestsMock::ShutDown(request))
                 }
                 request => Err(request),
+            }
+        }
+    }
+
+    impl ResponseTypingFn<FilterMock> for SomeRequestsMock {
+        fn typing_fn(
+            &self,
+        ) -> fn(
+            UntypedResponseMessage,
+        ) -> Result<
+            <FilterMock as MessageFilter>::IncomingResponses,
+            serde_json::Error,
+        > {
+            match self {
+                SomeRequestsMock::ShutDown(_) => |untyped_message: UntypedResponseMessage| {
+                    RequestMessage::<Shutdown>::response_typing_fn()(untyped_message)
+                        .map(SomeResponsesMock::Shutdown)
+                },
             }
         }
     }

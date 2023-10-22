@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
@@ -9,17 +7,14 @@ use crate::{
                 response_error::{
                     ReservedResponseErrorCodes, ResponseError, ResponseErrorCode::Reserved,
                 },
-                LspResponse, ResponseId, ResponseMessage,
+                LspResponse, ResponseId, ResponseMessage, UntypedResponseMessage,
             },
             LspRequest,
         },
         groups::{
             notifications::AllNotifications,
             requests::AllRequests,
-            responses::{
-                errors::{ErrorResponse, InvalidMessageResponse},
-                AllResponses,
-            },
+            responses::errors::{DecodeErrorResponse, ErrorResponse, InvalidMessageResponse},
             AllMessages,
         },
     },
@@ -33,7 +28,7 @@ pub(crate) struct ServiceMessageFilter<F: MessageFilter> {
     frontend_tx: UnboundedSender<AllMessages>,
     backend_rx: UnboundedReceiver<OutgoingMessage<F>>,
     backend_tx: UnboundedSender<IncomingMessage<F>>,
-    filter_marker: PhantomData<F>,
+    type_store: F::TypeStore,
 }
 
 impl<F: MessageFilter> ServiceMessageFilter<F> {
@@ -48,7 +43,7 @@ impl<F: MessageFilter> ServiceMessageFilter<F> {
             frontend_tx,
             backend_rx,
             backend_tx,
-            filter_marker: PhantomData,
+            type_store: F::TypeStore::new(),
         }
     }
 
@@ -60,6 +55,10 @@ impl<F: MessageFilter> ServiceMessageFilter<F> {
     pub fn forward_to_frontend(&mut self) {
         if let Ok(message_result) = self.backend_rx.try_next() {
             let message = message_result.expect(BACKEND_OUTPUT_CLOSED);
+            if let OutgoingMessage::Request(outgoing_request) = &message {
+                self.type_store.store_request_type(outgoing_request)
+            }
+
             self.frontend_tx
                 .unbounded_send(message.into())
                 .expect(FRONTEND_INPUT_CLOSED)
@@ -70,7 +69,7 @@ impl<F: MessageFilter> ServiceMessageFilter<F> {
         if let Ok(message_result) = self.frontend_rx.try_next() {
             let message = message_result.expect(FRONTEND_OUTPUT_CLOSED);
 
-            match IncomingMessage::<F>::try_from(message) {
+            match self.typeset_incoming(message) {
                 Ok(incoming_message) => self
                     .backend_tx
                     .unbounded_send(incoming_message)
@@ -83,28 +82,11 @@ impl<F: MessageFilter> ServiceMessageFilter<F> {
             }
         }
     }
-}
 
-pub trait MessageFilter {
-    type OutgoingNotifications: Into<AllNotifications>;
-    type OutgoingRequests: Into<AllRequests>;
-    type OutgoingResponses: Into<AllResponses>;
-    type IncomingNotifications: TryFrom<AllNotifications, Error = AllNotifications>;
-    type IncomingRequests: TryFrom<AllRequests, Error = AllRequests>;
-    type IncomingResponses: TryFrom<AllResponses, Error = AllResponses>;
-}
-
-#[derive(Debug, PartialEq)]
-pub enum IncomingMessage<F: MessageFilter> {
-    Notification(F::IncomingNotifications),
-    Request(F::IncomingRequests),
-    Response(F::IncomingResponses),
-}
-
-impl<F: MessageFilter> TryFrom<AllMessages> for IncomingMessage<F> {
-    type Error = ResponseMessage<ErrorResponse>;
-
-    fn try_from(all_messages: AllMessages) -> Result<Self, Self::Error> {
+    fn typeset_incoming(
+        &mut self,
+        all_messages: AllMessages,
+    ) -> Result<IncomingMessage<F>, ResponseMessage<ErrorResponse>> {
         return match all_messages {
             AllMessages::Requests(message) => message
                 .try_into()
@@ -112,11 +94,13 @@ impl<F: MessageFilter> TryFrom<AllMessages> for IncomingMessage<F> {
                 .map_err(|request: AllRequests| {
                     invalid_message::<F>(AllMessages::Requests(request))
                 }),
-            AllMessages::Responses(message) => {
-                message.try_into().map(IncomingMessage::Response).map_err(
-                    |response: AllResponses| invalid_message::<F>(AllMessages::Responses(response)),
-                )
-            }
+            AllMessages::UntypedResponse(untyped_response) => self
+                .type_store
+                .load_response_type(untyped_response)
+                .map(IncomingMessage::Response)
+                .map_err(|parse_error: serde_json::Error| {
+                    DecodeErrorResponse::create(parse_error.into())
+                }),
             AllMessages::Notifications(message) => message
                 .try_into()
                 .map(IncomingMessage::Notification)
@@ -131,17 +115,49 @@ impl<F: MessageFilter> TryFrom<AllMessages> for IncomingMessage<F> {
             InvalidMessageResponse::create(
                 match &message {
                     AllMessages::Requests(request) => request.request_id().clone().into(),
-                    AllMessages::Responses(response) => response.response_id().clone(),
+                    AllMessages::UntypedResponse(untyped_response) => untyped_response.id.clone(),
                     AllMessages::Notifications(_) => ResponseId::Null,
                 },
                 ResponseError {
                     code: Reserved(ReservedResponseErrorCodes::InternalError),
-                    message: format!("Invalid message for {:#?}", std::any::type_name::<F>()),
+                    message: format!("invalid message for {:#?}", std::any::type_name::<F>()),
                     data: Some(serde_json::to_value(message).expect("message not serializable")),
                 },
             )
         }
     }
+}
+
+pub trait TypeStore<F: MessageFilter> {
+    fn new() -> Self;
+    fn store_request_type(&mut self, outgoing_request: &F::OutgoingRequests);
+    fn load_response_type(
+        &mut self,
+        untyped_response: UntypedResponseMessage,
+    ) -> Result<F::IncomingResponses, serde_json::Error>;
+}
+
+pub trait ResponseTypingFn<F: MessageFilter> {
+    fn typing_fn(
+        &self,
+    ) -> fn(UntypedResponseMessage) -> Result<F::IncomingResponses, serde_json::Error>;
+}
+
+pub trait MessageFilter: Sized {
+    type OutgoingNotifications: Into<AllNotifications>;
+    type OutgoingRequests: Into<AllRequests> + LspRequest + ResponseTypingFn<Self>;
+    type OutgoingResponses: LspResponse;
+    type IncomingNotifications: TryFrom<AllNotifications, Error = AllNotifications>;
+    type IncomingRequests: TryFrom<AllRequests, Error = AllRequests>;
+    type IncomingResponses;
+    type TypeStore: TypeStore<Self>;
+}
+
+#[derive(Debug, PartialEq)]
+pub enum IncomingMessage<F: MessageFilter> {
+    Notification(F::IncomingNotifications),
+    Request(F::IncomingRequests),
+    Response(F::IncomingResponses),
 }
 
 #[derive(Debug, PartialEq)]
@@ -156,18 +172,23 @@ impl<F: MessageFilter> From<OutgoingMessage<F>> for AllMessages {
         match outgoing_message {
             OutgoingMessage::Notification(message) => AllMessages::Notifications(message.into()),
             OutgoingMessage::Request(message) => AllMessages::Requests(message.into()),
-            OutgoingMessage::Response(message) => AllMessages::Responses(message.into()),
+            OutgoingMessage::Response(message) => AllMessages::UntypedResponse(message.untyped()),
         }
     }
 }
 
 #[cfg(test)]
 pub mod tests {
+    use std::collections::HashMap;
+
     use lsp_types::NumberOrString::Number;
     use once_cell::sync::Lazy;
 
     use crate::messages::{
-        core::request::{tests::WILL_RENAME_FILES_REQUEST_MOCK, RequestMessage},
+        core::{
+            request::{tests::SHUTDOWN_REQUEST_MOCK, RequestMessage},
+            RequestId,
+        },
         groups::{
             notifications::tests::SomeNotificationsMock,
             requests::{tests::SomeRequestsMock, AllClientRequests::ShowDocument},
@@ -176,6 +197,48 @@ pub mod tests {
     };
 
     use super::*;
+
+    pub struct TypeStoreMock {
+        store: HashMap<
+            RequestId,
+            fn(UntypedResponseMessage) -> Result<SomeResponsesMock, serde_json::Error>,
+        >,
+    }
+
+    impl TypeStore<FilterMock> for TypeStoreMock {
+        fn new() -> Self {
+            Self {
+                store: HashMap::new(),
+            }
+        }
+
+        fn store_request_type(
+            &mut self,
+            outgoing_request: &<FilterMock as MessageFilter>::OutgoingRequests,
+        ) {
+            self.store.insert(
+                outgoing_request.request_id().clone(),
+                outgoing_request.typing_fn(),
+            );
+        }
+
+        fn load_response_type(
+            &mut self,
+            untyped_response: UntypedResponseMessage,
+        ) -> Result<SomeResponsesMock, serde_json::Error> {
+            match &untyped_response.id {
+                ResponseId::NumberOrString(request_id) => {
+                    let request_id = RequestId::from(request_id.clone());
+                    // TEMP: unwrap
+                    self.store.get(&request_id).unwrap()(untyped_response)
+                }
+                ResponseId::Null => {
+                    // This is an error response not based on a notification
+                    todo!()
+                }
+            }
+        }
+    }
 
     #[derive(Debug, PartialEq)]
     pub struct FilterMock;
@@ -187,17 +250,14 @@ pub mod tests {
         type IncomingNotifications = SomeNotificationsMock;
         type IncomingRequests = SomeRequestsMock;
         type IncomingResponses = SomeResponsesMock;
+        type TypeStore = TypeStoreMock;
     }
 
     pub const OUTGOING_MESSAGE_MOCK: OutgoingMessage<FilterMock> =
-        OutgoingMessage::<FilterMock>::Request(SomeRequestsMock::WillRenameFiles(
-            WILL_RENAME_FILES_REQUEST_MOCK,
-        ));
+        OutgoingMessage::<FilterMock>::Request(SomeRequestsMock::ShutDown(SHUTDOWN_REQUEST_MOCK));
 
     pub const INCOMING_MESSAGE_MOCK: IncomingMessage<FilterMock> =
-        IncomingMessage::<FilterMock>::Request(SomeRequestsMock::WillRenameFiles(
-            WILL_RENAME_FILES_REQUEST_MOCK,
-        ));
+        IncomingMessage::<FilterMock>::Request(SomeRequestsMock::ShutDown(SHUTDOWN_REQUEST_MOCK));
 
     pub static INVALID_INCOMING_MOCK: Lazy<AllMessages> = Lazy::new(|| {
         AllMessages::Requests(AllRequests::Client(ShowDocument(RequestMessage {

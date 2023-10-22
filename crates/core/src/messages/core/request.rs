@@ -3,7 +3,10 @@ use lsp_types::request::Request;
 use lsp_types::NumberOrString;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 
-use super::version::Version;
+use super::{
+    response::{ResponseMessage, UntypedResponseMessage},
+    version::Version,
+};
 
 pub trait LspRequest {
     fn request_id(&self) -> &RequestId;
@@ -15,13 +18,20 @@ impl<R: Request> LspRequest for RequestMessage<R> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Deref, From, Into)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Deref, From, Into)]
 #[serde(transparent)]
 pub struct RequestId(NumberOrString);
 
 pub struct RequestMessage<R: Request> {
     pub id: RequestId,
     pub params: Option<R::Params>,
+}
+
+impl<R: Request> RequestMessage<R> {
+    pub fn response_typing_fn(
+    ) -> fn(UntypedResponseMessage) -> Result<ResponseMessage<R>, serde_json::Error> {
+        |untyped_response_message: UntypedResponseMessage| untyped_response_message.try_into()
+    }
 }
 
 impl<R: Request> Serialize for RequestMessage<R> {
@@ -91,44 +101,39 @@ impl<R: Request> PartialEq for RequestMessage<R> {
 
 #[cfg(test)]
 pub mod tests {
-    use lsp_types::{request::WillRenameFiles, RenameFilesParams};
+    use lsp_types::request::Shutdown;
     use once_cell::sync::Lazy;
     use serde_json::json;
 
     use super::*;
 
-    pub const WILL_RENAME_FILES_REQUEST_MOCK: RequestMessage<WillRenameFiles> = RequestMessage {
+    pub const SHUTDOWN_REQUEST_MOCK: RequestMessage<Shutdown> = RequestMessage {
         id: RequestId(lsp_types::NumberOrString::Number(0)),
-        params: Some(RenameFilesParams { files: vec![] }),
+        params: None,
     };
 
-    static WILL_RENAME_FILES_REQUEST_JSON: Lazy<serde_json::Value> = Lazy::new(|| {
+    static SHUTDOWN_REQUEST_JSON: Lazy<serde_json::Value> = Lazy::new(|| {
         json!({
             "jsonrpc": "2.0",
             "id": 0,
-            "method": "workspace/willRenameFiles",
-            "params": {
-                "files": []
-            }
+            "method": "shutdown",
         })
     });
 
     #[test]
     fn serializes_request_message() {
         assert_eq!(
-            *WILL_RENAME_FILES_REQUEST_JSON,
-            serde_json::to_value(WILL_RENAME_FILES_REQUEST_MOCK).unwrap()
+            *SHUTDOWN_REQUEST_JSON,
+            serde_json::to_value(SHUTDOWN_REQUEST_MOCK).unwrap()
         )
     }
 
     #[test]
     fn deserializes_request_message() {
         assert_eq!(
-            WILL_RENAME_FILES_REQUEST_MOCK,
-            serde_json::from_value::<RequestMessage<WillRenameFiles>>(
-                WILL_RENAME_FILES_REQUEST_JSON.clone(),
-            )
-            .unwrap()
+            SHUTDOWN_REQUEST_MOCK,
+            serde_json::from_value::<RequestMessage<Shutdown>>(SHUTDOWN_REQUEST_JSON.clone(),)
+                .unwrap()
         )
     }
 }
